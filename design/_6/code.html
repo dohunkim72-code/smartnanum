@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html class="light" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#3713ec",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#131022",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "1rem",
+                        "lg": "2rem",
+                        "xl": "3rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<title>기부금 신청하기</title>
+<style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+        #terms-modal:target {
+            display: flex;
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-[#100d1b] dark:text-white">
+<div class="relative flex h-auto min-h-screen w-full flex-col max-w-[480px] mx-auto overflow-x-hidden">
+<div class="flex items-center bg-background-light dark:bg-background-dark p-4 pb-2 justify-between sticky top-0 z-10">
+<div class="text-[#100d1b] dark:text-white flex size-12 shrink-0 items-center justify-start">
+<span class="material-symbols-outlined text-2xl cursor-pointer">arrow_back_ios</span>
+</div>
+<h2 class="text-[#100d1b] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center pr-12">기부금 신청하기</h2>
+</div>
+<div class="@container">
+<div class="@[480px]:px-4 py-3 px-4">
+<div class="w-full bg-center bg-no-repeat bg-cover flex flex-col justify-end overflow-hidden bg-primary/10 rounded-xl min-h-[160px] relative" style='background-image: linear-gradient(rgba(55, 19, 236, 0.1), rgba(55, 19, 236, 0.4)), url("https://lh3.googleusercontent.com/aida-public/AB6AXuADO9hUDxfQ7YKzhgvBKLQYxAfNA_En3HFfC4QhPvqIf2Dafco_RkT2zKatwKGOv70SyRtzBP39yIbpDlSTrLJxYSyusdz38Rhx2y7jz2JsXkPqE4PiMqhZdWEwTwBz3skJ_UucMnwAyWK2--hPRp-5w3G00arWKzeroEOypBSrLlAM6xCT0khFirrOKzN61h6tNJHNp89fjo1IFfmGZAq82n7Y5Qg1z62N3IQJxio70y__E3AkPKfAPfXsP0EhK9_MHI-t-wOHOA");'>
+<div class="p-6">
+<p class="text-white font-bold text-xl leading-tight">연말정산 기부금<br/>영수증 간편 발급 안내</p>
+<p class="text-white/80 text-sm mt-1">소득공제를 위한 정보를 입력해주세요.</p>
+</div>
+</div>
+</div>
+</div>
+<h3 class="text-[#100d1b] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] px-4 pb-2 pt-6">기부자 정보</h3>
+<div class="flex flex-wrap items-end gap-3 px-4 py-3">
+<label class="flex flex-col min-w-40 flex-1">
+<p class="text-[#100d1b] dark:text-gray-300 text-sm font-medium leading-normal pb-2">주민등록번호</p>
+<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-xl text-[#100d1b] dark:bg-background-dark/50 dark:text-white focus:outline-0 focus:ring-1 focus:ring-primary border border-[#d3cfe7] dark:border-gray-700 bg-white h-14 placeholder:text-gray-400 p-[15px] text-base font-normal" placeholder="앞 6자리"/>
+</label>
+<div class="h-14 flex items-center text-gray-400 pb-2">-</div>
+<label class="flex flex-col min-w-40 flex-1">
+<p class="text-transparent text-sm font-medium leading-normal pb-2">뒷자리</p>
+<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-xl text-[#100d1b] dark:bg-background-dark/50 dark:text-white focus:outline-0 focus:ring-1 focus:ring-primary border border-[#d3cfe7] dark:border-gray-700 bg-white h-14 placeholder:text-gray-400 p-[15px] text-base font-normal" placeholder="뒤 7자리" type="password"/>
+</label>
+</div>
+<div class="flex flex-col gap-3 px-4 py-3">
+<p class="text-[#100d1b] dark:text-gray-300 text-sm font-medium leading-normal">주소</p>
+<div class="flex gap-2">
+<label class="flex-1">
+<input class="form-input w-full rounded-xl text-[#100d1b] dark:bg-background-dark/50 dark:text-white border border-[#d3cfe7] dark:border-gray-700 bg-white h-14 placeholder:text-gray-400 p-[15px] text-base" placeholder="우편번호" readonly=""/>
+</label>
+<button class="px-5 bg-white dark:bg-background-dark/50 border border-primary text-primary font-bold rounded-xl text-sm whitespace-nowrap">우편번호 찾기</button>
+</div>
+<input class="form-input w-full rounded-xl text-[#100d1b] dark:bg-gray-100/10 dark:text-gray-400 border border-[#d3cfe7] dark:border-gray-700 bg-gray-50 h-14 placeholder:text-gray-400 p-[15px] text-base" placeholder="기본주소" readonly=""/>
+<input class="form-input w-full rounded-xl text-[#100d1b] dark:bg-background-dark/50 dark:text-white border border-[#d3cfe7] dark:border-gray-700 bg-white h-14 placeholder:text-gray-400 p-[15px] text-base focus:ring-1 focus:ring-primary" placeholder="상세주소 (동, 호수 등)"/>
+</div>
+<div class="flex flex-col gap-4 px-4 py-3">
+<label class="flex flex-col">
+<p class="text-[#100d1b] dark:text-gray-300 text-sm font-medium leading-normal pb-2">휴대폰 번호</p>
+<input class="form-input flex w-full rounded-xl text-[#100d1b] dark:bg-background-dark/50 dark:text-white border border-[#d3cfe7] dark:border-gray-700 bg-white h-14 placeholder:text-gray-400 p-[15px] text-base" placeholder="010-0000-0000"/>
+</label>
+<label class="flex flex-col">
+<p class="text-[#100d1b] dark:text-gray-300 text-sm font-medium leading-normal pb-2">회사명 (선택)</p>
+<input class="form-input flex w-full rounded-xl text-[#100d1b] dark:bg-background-dark/50 dark:text-white border border-[#d3cfe7] dark:border-gray-700 bg-white h-14 placeholder:text-gray-400 p-[15px] text-base" placeholder="근무 중인 회사명을 입력하세요"/>
+</label>
+</div>
+<h3 class="text-[#100d1b] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] px-4 pb-2 pt-6">기부 상세 정보</h3>
+<div class="flex flex-col gap-4 px-4 py-3">
+<label class="flex flex-col">
+<p class="text-[#100d1b] dark:text-gray-300 text-sm font-medium leading-normal pb-2">기부 금액</p>
+<div class="relative">
+<input class="form-input flex w-full rounded-xl text-[#100d1b] dark:bg-background-dark/50 dark:text-white border border-[#d3cfe7] dark:border-gray-700 bg-white h-14 placeholder:text-gray-400 p-[15px] pr-12 text-right text-base font-bold" placeholder="0"/>
+<span class="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">원</span>
+</div>
+</label>
+<div class="flex items-center gap-3 py-1">
+<input class="h-5 w-5 rounded border-[#d3cfe7] text-primary focus:ring-primary" id="cash-receipt" type="checkbox"/>
+<label class="text-base font-medium text-[#100d1b] dark:text-white" for="cash-receipt">현금영수증 신청</label>
+</div>
+<div class="w-full aspect-video bg-gray-200 dark:bg-gray-800 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300 dark:border-gray-600">
+<div class="flex flex-col items-center text-gray-400">
+<span class="material-symbols-outlined text-4xl mb-1">image</span>
+<span class="text-xs">가이드 이미지 플레이스홀더</span>
+</div>
+</div>
+<div class="bg-blue-50/50 dark:bg-blue-900/10 p-4 rounded-xl">
+<h4 class="text-sm font-bold text-gray-700 dark:text-gray-200 mb-3 flex items-center gap-1">
+<span class="material-symbols-outlined text-lg">info</span>
+                    유의사항
+                </h4>
+<ul class="flex flex-col gap-2.5">
+<li class="flex gap-2 text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+<span class="text-primary mt-1">•</span>
+<span>타 기부금이 있으신 경우 기부신청시 기부금액 만큼 제외 후 신청해 주세요.</span>
+</li>
+<li class="flex gap-2 text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+<span class="text-primary mt-1">•</span>
+<span>기부 신청금액이 결정 세액보다 많은 경우, 기부금이 이월 될 수 있습니다.</span>
+</li>
+<li class="flex gap-2 text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+<span class="text-primary mt-1">•</span>
+<span>기부금 외 타 공제율이 높은 경우, 기부금이 이월 될 수 있습니다.</span>
+</li>
+<li class="flex gap-2 text-sm text-gray-600 dark:text-gray-400 leading-relaxed">
+<span class="text-primary mt-1">•</span>
+<span>이월된 기부금에 대해서는 본인 책임으로, 물품대금은 완납하셔야 합니다.</span>
+</li>
+</ul>
+</div>
+</div>
+<div class="px-4 py-6 mt-2">
+<div class="flex items-center gap-3 mb-6 bg-white dark:bg-background-dark/30 p-4 rounded-xl border border-dashed border-[#d3cfe7] dark:border-gray-700">
+<input class="h-6 w-6 rounded-full border-[#d3cfe7] text-primary focus:ring-primary cursor-pointer" id="terms" type="checkbox"/>
+<div class="flex-1 flex items-center justify-between">
+<label class="text-sm font-medium text-[#100d1b] dark:text-gray-200 cursor-pointer" for="terms">개인정보 수집 및 제3자 제공동의</label>
+<a class="flex items-center text-xs font-bold text-primary bg-primary/5 px-2 py-1 rounded-md" href="#terms-modal">
+                        내용보기
+                        <span class="material-symbols-outlined text-sm ml-0.5">chevron_right</span>
+</a>
+</div>
+</div>
+<p class="text-red-500 text-sm font-semibold text-center mb-4 leading-relaxed">
+                서명 하신 후 동의 및 제출, 신청 완료하기 버튼까지 눌러 주세요
+            </p>
+<button class="w-full bg-primary text-white font-bold py-4 rounded-xl shadow-lg shadow-primary/20 hover:bg-primary/90 transition-colors">신청 완료하기</button>
+</div>
+<div class="bg-gray-100 dark:bg-background-dark/40 py-8 px-4 rounded-t-xl">
+<div class="flex items-center justify-between mb-4">
+<h3 class="text-[#100d1b] dark:text-white text-base font-bold">최근 신청 내역</h3>
+<span class="text-primary text-xs font-semibold cursor-pointer">전체보기</span>
+</div>
+<div class="flex flex-col gap-3">
+<div class="flex items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+<div class="flex items-center gap-3">
+<div class="bg-green-100 dark:bg-green-900/30 p-2 rounded-full">
+<span class="material-symbols-outlined text-green-600 dark:text-green-400 text-lg">check_circle</span>
+</div>
+<div>
+<p class="text-sm font-bold">푸른숲 재단</p>
+<p class="text-xs text-gray-500">2023.11.20</p>
+</div>
+</div>
+<div class="text-right">
+<p class="text-sm font-bold">50,000원</p>
+<p class="text-[10px] text-primary font-medium">발급완료</p>
+</div>
+</div>
+<div class="flex items-center justify-between bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+<div class="flex items-center gap-3">
+<div class="bg-yellow-100 dark:bg-yellow-900/30 p-2 rounded-full">
+<span class="material-symbols-outlined text-yellow-600 dark:text-yellow-400 text-lg">pending</span>
+</div>
+<div>
+<p class="text-sm font-bold">희망 나눔 본부</p>
+<p class="text-xs text-gray-500">2023.11.15</p>
+</div>
+</div>
+<div class="text-right">
+<p class="text-sm font-bold">30,000원</p>
+<p class="text-[10px] text-yellow-600 font-medium">검토중</p>
+</div>
+</div>
+</div>
+</div>
+<div class="h-10 bg-gray-100 dark:bg-background-dark/40"></div>
+<div class="hidden fixed inset-0 z-[100] bg-black/60 items-end justify-center" id="terms-modal">
+<div class="bg-white dark:bg-[#1c182e] w-full max-w-[480px] rounded-t-[2rem] p-6 pb-10 flex flex-col max-h-[90vh]">
+<div class="flex items-center justify-between mb-6">
+<h2 class="text-xl font-bold">약관 동의 및 서명</h2>
+<a class="material-symbols-outlined text-gray-400" href="#">close</a>
+</div>
+<div class="flex-1 overflow-y-auto pr-2 mb-6">
+<div class="space-y-4">
+<div class="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+<h4 class="font-bold text-sm mb-2">1. 개인정보 수집 및 이용</h4>
+<p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                                기부금 영수증 발급 및 연말정산 간소화 서비스 연계를 위해 성명, 주민등록번호, 연락처, 주소 정보를 수집하며, 관계 법령에 따라 5년간 보관합니다.
+                            </p>
+</div>
+<div class="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl">
+<h4 class="font-bold text-sm mb-2">2. 제3자 제공 동의</h4>
+<p class="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                                발급된 기부금 영수증 정보는 국세청 연말정산 간소화 서비스를 위해 해당 기관에 제공될 수 있습니다.
+                            </p>
+</div>
+<div class="pt-4 border-t border-gray-100 dark:border-gray-800">
+<h4 class="font-bold text-sm mb-3">서명</h4>
+<div class="w-full aspect-[2/1] bg-gray-100 dark:bg-gray-900 rounded-xl flex items-center justify-center border border-dashed border-gray-300 dark:border-gray-700">
+<p class="text-sm text-gray-400">이곳에 서명해주세요</p>
+</div>
+</div>
+</div>
+</div>
+<a class="w-full bg-primary text-white font-bold py-4 rounded-xl text-center shadow-lg shadow-primary/20" href="#">동의하고 확인</a>
+</div>
+</div>
+</div>
+
+</body></html>

@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html class="light" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#3713ec",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#131022",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans", "sans-serif"]
+                    },
+                    borderRadius: { "DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+<title>기부 한도 및 환급액 산출</title>
+<style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark font-display text-[#100d1b] dark:text-white">
+<div class="relative flex h-auto min-h-screen w-full max-w-[480px] mx-auto flex-col overflow-x-hidden pb-10">
+<div class="flex items-center bg-background-light dark:bg-background-dark p-4 pb-2 justify-between sticky top-0 z-10">
+<div class="text-[#100d1b] dark:text-white flex size-12 shrink-0 items-center cursor-pointer">
+<span class="material-symbols-outlined">arrow_back_ios</span>
+</div>
+<h2 class="text-[#100d1b] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center pr-12">기부 한도 및 환급액 산출</h2>
+</div>
+<div class="px-4 pb-3">
+<div class="bg-[#d3cfe7]/30 dark:bg-[#332b5e]/30 p-1 rounded-xl flex items-center">
+<button class="flex-1 py-2 px-4 rounded-lg text-sm font-bold bg-white dark:bg-primary shadow-sm text-primary dark:text-white transition-all">
+                    년 (Annual)
+                </button>
+<button class="flex-1 py-2 px-4 rounded-lg text-sm font-bold text-[#594c9a] dark:text-[#a196d9] transition-all">
+                    월 (Monthly)
+                </button>
+</div>
+</div>
+<h3 class="text-[#100d1b] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] px-4 pb-2 pt-4">소득 정보 입력</h3>
+<div class="flex flex-col gap-4 px-4 py-3">
+<label class="flex flex-col w-full">
+<p class="text-[#100d1b] dark:text-white text-base font-medium leading-normal pb-2">근로 소득</p>
+<div class="flex w-full items-stretch rounded-xl overflow-hidden">
+<input class="form-input flex w-full min-w-0 flex-1 border border-[#d3cfe7] dark:border-[#332b5e] bg-white dark:bg-[#1e1a3a] text-[#100d1b] dark:text-white h-14 placeholder:text-[#594c9a] p-[15px] rounded-l-xl border-r-0 text-base font-normal" placeholder="총 급여를 입력해주세요" type="text" value="50,000,000"/>
+<div class="text-[#594c9a] dark:text-[#a196d9] flex border border-[#d3cfe7] dark:border-[#332b5e] bg-white dark:bg-[#1e1a3a] items-center justify-center pr-[15px] rounded-r-xl border-l-0">
+<span class="text-sm font-bold">원</span>
+</div>
+</div>
+</label>
+</div>
+<div class="p-4">
+<div class="flex flex-col gap-4 rounded-xl bg-white dark:bg-[#1e1a3a] p-4 shadow-sm h-auto transition-all">
+<div class="flex flex-col gap-1">
+<p class="text-[#100d1b] dark:text-white text-base font-bold leading-tight">입력 가이드</p>
+<p class="text-[#594c9a] dark:text-[#a196d9] text-sm font-normal leading-normal">정확한 환급액 계산을 위해 국세청 연말정산 자료를 참고하세요.</p>
+</div>
+<div class="w-full aspect-[16/9] bg-primary/5 dark:bg-white/5 rounded-xl flex items-center justify-center overflow-hidden border border-dashed border-[#d3cfe7] dark:border-[#332b5e]">
+<span class="material-symbols-outlined text-4xl text-[#d3cfe7] dark:text-[#332b5e]">image</span>
+</div>
+<p class="text-[#100d1b] dark:text-white text-sm leading-relaxed">
+                    • <span class="text-red-600 dark:text-red-400 font-bold">년 급여 입력시</span>: 근로소득 원천징수서 영수증의 <span class="bg-yellow-200 dark:bg-yellow-600 px-1 rounded">23. 근로소득금액</span>을 입력합니다.
+                </p>
+<div class="w-full aspect-[16/9] bg-primary/5 dark:bg-white/5 rounded-xl flex items-center justify-center overflow-hidden border border-dashed border-[#d3cfe7] dark:border-[#332b5e]">
+<span class="material-symbols-outlined text-4xl text-[#d3cfe7] dark:text-[#332b5e]">image</span>
+</div>
+<p class="text-[#100d1b] dark:text-white text-sm leading-relaxed">
+                    • <span class="text-blue-600 dark:text-blue-400 font-bold">월 급여 입력시</span>: 급여계 - 식대 - 교통비 금액을 입력 합니다.
+                </p>
+</div>
+</div>
+<h3 class="text-[#100d1b] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em] px-4 pb-2 pt-6">기부 항목별 입력</h3>
+<div class="flex flex-col gap-4 px-4 py-3">
+<label class="flex flex-col w-full">
+<p class="text-[#100d1b] dark:text-white text-sm font-medium leading-normal pb-2">정치자금 기부금</p>
+<div class="flex w-full items-stretch rounded-xl overflow-hidden">
+<input class="form-input flex w-full min-w-0 flex-1 border border-[#d3cfe7] dark:border-[#332b5e] bg-white dark:bg-[#1e1a3a] text-[#100d1b] dark:text-white h-12 placeholder:text-[#594c9a] p-[15px] rounded-l-xl border-r-0 text-sm" placeholder="10만원 이하 100% 환급" type="text"/>
+<div class="text-[#594c9a] dark:text-[#a196d9] flex border border-[#d3cfe7] dark:border-[#332b5e] bg-white dark:bg-[#1e1a3a] items-center justify-center pr-[15px] rounded-r-xl border-l-0">
+<span class="material-symbols-outlined text-xl">account_balance</span>
+</div>
+</div>
+</label>
+<label class="flex flex-col w-full">
+<p class="text-[#100d1b] dark:text-white text-sm font-medium leading-normal pb-2">종교단체 기부금</p>
+<div class="flex w-full items-stretch rounded-xl overflow-hidden">
+<input class="form-input flex w-full min-w-0 flex-1 border border-[#d3cfe7] dark:border-[#332b5e] bg-white dark:bg-[#1e1a3a] text-[#100d1b] dark:text-white h-12 placeholder:text-[#594c9a] p-[15px] rounded-l-xl border-r-0 text-sm" placeholder="금액을 입력해주세요" type="text"/>
+<div class="text-[#594c9a] dark:text-[#a196d9] flex border border-[#d3cfe7] dark:border-[#332b5e] bg-white dark:bg-[#1e1a3a] items-center justify-center pr-[15px] rounded-r-xl border-l-0">
+<span class="material-symbols-outlined text-xl">church</span>
+</div>
+</div>
+</label>
+<label class="flex flex-col w-full">
+<p class="text-[#100d1b] dark:text-white text-sm font-medium leading-normal pb-2">기타 지정 기부금</p>
+<div class="flex w-full items-stretch rounded-xl overflow-hidden">
+<input class="form-input flex w-full min-w-0 flex-1 border border-[#d3cfe7] dark:border-[#332b5e] bg-white dark:bg-[#1e1a3a] text-[#100d1b] dark:text-white h-12 placeholder:text-[#594c9a] p-[15px] rounded-l-xl border-r-0 text-sm" placeholder="금액을 입력해주세요" type="text"/>
+<div class="text-[#594c9a] dark:text-[#a196d9] flex border border-[#d3cfe7] dark:border-[#332b5e] bg-white dark:bg-[#1e1a3a] items-center justify-center pr-[15px] rounded-r-xl border-l-0">
+<span class="material-symbols-outlined text-xl">volunteer_activism</span>
+</div>
+</div>
+</label>
+</div>
+<div class="p-4 mt-4">
+<div class="flex flex-col gap-6 rounded-2xl bg-[#131022] p-6 shadow-xl border border-white/10">
+<div class="flex flex-col gap-2">
+<p class="text-white/80 text-sm font-medium">이번에 기부할 금액</p>
+<div class="flex w-full items-stretch rounded-xl overflow-hidden bg-white/5 border border-white/20">
+<input class="form-input flex w-full min-w-0 flex-1 border-0 bg-transparent text-white h-12 placeholder:text-white/30 p-[15px] text-sm focus:ring-0" placeholder="기부할 금액을 입력하세요" type="number"/>
+<div class="text-white/50 flex items-center justify-center pr-[15px]">
+<span class="text-sm font-bold">원</span>
+</div>
+</div>
+</div>
+<div class="flex justify-between items-start">
+<div>
+<p class="text-white/60 text-sm font-medium">추천 기부 한도</p>
+<div class="flex items-baseline gap-1 mt-1">
+<h4 class="text-white text-3xl font-bold">4,500,000</h4>
+<span class="text-white text-lg">원</span>
+</div>
+</div>
+<div class="bg-primary/20 text-primary px-3 py-1 rounded-full border border-primary/30">
+<span class="text-xs font-bold">상위 90% 효율</span>
+</div>
+</div>
+<div class="h-px bg-white/10"></div>
+<div class="flex justify-between items-center">
+<p class="text-white/80 text-base font-semibold">예상 환급액</p>
+<div class="flex items-baseline gap-1">
+<span class="text-primary text-2xl font-black">675,000</span>
+<span class="text-primary text-sm font-bold">원</span>
+</div>
+</div>
+<p class="text-white/40 text-xs text-center">※ 위 금액은 단순 계산 수치이며 실제와 다를 수 있습니다.</p>
+</div>
+</div>
+<div class="px-4 pb-6 mt-auto">
+<p class="text-[#594c9a] dark:text-[#a196d9] text-[11px] leading-normal pb-4 text-center">
+                * 본 결과는 예상치이며, 국세청 홈택스의 최종 결정에 따라 실제 환급액은 달라질 수 있습니다.
+            </p>
+<button class="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-xl transition-colors shadow-lg shadow-primary/20">
+                계산하기
+            </button>
+</div>
+</div>
+
+</body></html>

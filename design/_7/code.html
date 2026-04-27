@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html class="light" lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&amp;family=Noto+Sans+KR:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#3713ec",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#131022",
+                    },
+                    fontFamily: {
+                        "display": ["Public Sans", "Noto Sans KR"]
+                    },
+                    borderRadius: { "DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+<style type="text/tailwindcss">
+        body { font-family: 'Public Sans', 'Noto Sans KR', sans-serif; }
+        .signature-pad {
+            background-image: repeating-linear-gradient(0deg, #d3cfe7, #d3cfe7 1px, transparent 1px, transparent 20px),
+                              repeating-linear-gradient(90deg, #d3cfe7, #d3cfe7 1px, transparent 1px, transparent 20px);
+            background-size: 20px 20px;
+        }
+        .terms-checkbox {
+            --checkbox-tick-svg: url('data:image/svg+xml,%3csvg viewBox=%270 0 16 16%27 fill=%27rgb(255,255,255)%27 xmlns=%27http://www.w3.org/2000/svg%27%3e%3cpath d=%27M12.207 4.793a1 1 0 010 1.414l-5 5a1 1 0 01-1.414 0l-2-2a1 1 0 011.414-1.414L6.5 9.086l4.293-4.293a1 1 0 011.414 0z%27/%3e%3c/svg%3e');
+        }
+    </style>
+<style>
+        body {
+            min-height: max(884px, 100dvh);
+        }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-black/40 flex items-end justify-center min-h-screen">
+<div class="w-full max-w-[430px] bg-background-light dark:bg-background-dark rounded-t-lg shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+<div class="flex flex-col items-stretch bg-background-light dark:bg-background-dark pt-2 sticky top-0 z-20">
+<button class="flex h-5 w-full items-center justify-center">
+<div class="h-1.5 w-12 rounded-full bg-[#d3cfe7] dark:bg-gray-700"></div>
+</button>
+</div>
+<div class="flex-1 overflow-y-auto px-4 pb-6">
+<h2 class="text-[#100d1b] dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] pb-3 pt-5">전체 약관 동의 및 고객 서명</h2>
+<div class="mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg border border-[#e5e7eb] dark:border-gray-700 terms-checkbox">
+<label class="flex gap-x-3 items-center cursor-pointer">
+<input class="h-6 w-6 rounded border-[#d3cfe7] border-2 bg-transparent text-primary checked:bg-primary checked:border-primary checked:bg-[image:--checkbox-tick-svg] focus:ring-0 focus:ring-offset-0 focus:border-[#d3cfe7] focus:outline-none" id="checkAll" type="checkbox"/>
+<p class="text-[#100d1b] dark:text-white text-lg font-bold leading-normal">전체 동의하기</p>
+</label>
+</div>
+<div class="space-y-4 mb-8 terms-checkbox">
+<div class="p-4 bg-white dark:bg-gray-800 rounded-lg border border-[#e5e7eb] dark:border-gray-700">
+<label class="flex gap-x-3 items-start cursor-pointer">
+<input class="mt-1 h-5 w-5 rounded border-[#d3cfe7] border-2 bg-transparent text-primary checked:bg-primary checked:border-primary checked:bg-[image:--checkbox-tick-svg] focus:ring-0 focus:ring-offset-0 focus:border-[#d3cfe7] focus:outline-none term-item" type="checkbox"/>
+<div class="flex-1">
+<p class="text-[#100d1b] dark:text-white text-sm font-semibold mb-1">제1조 (목적)</p>
+<p class="text-gray-600 dark:text-gray-400 text-xs leading-relaxed">본 약관은 기부금 환급 및 기부 관리 서비스 이용과 관련하여 회사가 제공하는 제반 서비스의 이용 조건 및 절차, 이용자와 회사의 권리, 의무, 책임사항 등을 규정함을 목적으로 합니다.</p>
+</div>
+</label>
+</div>
+<div class="p-4 bg-white dark:bg-gray-800 rounded-lg border border-[#e5e7eb] dark:border-gray-700">
+<label class="flex gap-x-3 items-start cursor-pointer">
+<input class="mt-1 h-5 w-5 rounded border-[#d3cfe7] border-2 bg-transparent text-primary checked:bg-primary checked:border-primary checked:bg-[image:--checkbox-tick-svg] focus:ring-0 focus:ring-offset-0 focus:border-[#d3cfe7] focus:outline-none term-item" type="checkbox"/>
+<div class="flex-1">
+<p class="text-[#100d1b] dark:text-white text-sm font-semibold mb-1">제2조 (개인정보 수집 및 이용 동의)</p>
+<p class="text-gray-600 dark:text-gray-400 text-xs leading-relaxed">회사는 기부금 영수증 발급 및 환급 대행을 위해 성명, 주민등록번호(세무 신고용), 연락처 등을 수집합니다. 수집된 정보는 법령에 따른 보유기간 동안 안전하게 관리됩니다.</p>
+</div>
+</label>
+</div>
+<div class="p-4 bg-white dark:bg-gray-800 rounded-lg border border-[#e5e7eb] dark:border-gray-700">
+<label class="flex gap-x-3 items-start cursor-pointer">
+<input class="mt-1 h-5 w-5 rounded border-[#d3cfe7] border-2 bg-transparent text-primary checked:bg-primary checked:border-primary checked:bg-[image:--checkbox-tick-svg] focus:ring-0 focus:ring-offset-0 focus:border-[#d3cfe7] focus:outline-none term-item" type="checkbox"/>
+<div class="flex-1">
+<p class="text-[#100d1b] dark:text-white text-sm font-semibold mb-1">제3조 (서비스 이용의 제한)</p>
+<p class="text-gray-600 dark:text-gray-400 text-xs leading-relaxed">회사는 이용자가 본 약관을 위반하거나 서비스의 정상적인 운영을 방해하는 경우 서비스 이용을 제한하거나 중지할 수 있습니다.</p>
+</div>
+</label>
+</div>
+<div class="p-4 bg-white dark:bg-gray-800 rounded-lg border border-[#e5e7eb] dark:border-gray-700">
+<label class="flex gap-x-3 items-start cursor-pointer">
+<input class="mt-1 h-5 w-5 rounded border-[#d3cfe7] border-2 bg-transparent text-primary checked:bg-primary checked:border-primary checked:bg-[image:--checkbox-tick-svg] focus:ring-0 focus:ring-offset-0 focus:border-[#d3cfe7] focus:outline-none term-item" type="checkbox"/>
+<div class="flex-1">
+<p class="text-[#100d1b] dark:text-white text-sm font-semibold mb-1">제4조 (권리와 의무)</p>
+<p class="text-gray-600 dark:text-gray-400 text-xs leading-relaxed">이용자는 정확한 정보를 제공할 의무가 있으며, 회사는 이용자의 정보를 보호하고 원활한 서비스를 제공할 책임이 있습니다.</p>
+</div>
+</label>
+</div>
+<div class="p-4 bg-white dark:bg-gray-800 rounded-lg border border-[#e5e7eb] dark:border-gray-700">
+<label class="flex gap-x-3 items-start cursor-pointer">
+<input class="mt-1 h-5 w-5 rounded border-[#d3cfe7] border-2 bg-transparent text-primary checked:bg-primary checked:border-primary checked:bg-[image:--checkbox-tick-svg] focus:ring-0 focus:ring-offset-0 focus:border-[#d3cfe7] focus:outline-none term-item" type="checkbox"/>
+<div class="flex-1">
+<p class="text-[#100d1b] dark:text-white text-sm font-semibold mb-1">제5조 (기부금 환급 대행)</p>
+<p class="text-gray-600 dark:text-gray-400 text-xs leading-relaxed">이용자는 회사가 대리인으로서 관계 기관에 기부금 환급 업무를 수행하는 데 필요한 권한을 위임하는 것에 동의합니다.</p>
+</div>
+</label>
+</div>
+<div class="p-4 bg-white dark:bg-gray-800 rounded-lg border border-[#e5e7eb] dark:border-gray-700">
+<label class="flex gap-x-3 items-start cursor-pointer">
+<input class="mt-1 h-5 w-5 rounded border-[#d3cfe7] border-2 bg-transparent text-primary checked:bg-primary checked:border-primary checked:bg-[image:--checkbox-tick-svg] focus:ring-0 focus:ring-offset-0 focus:border-[#d3cfe7] focus:outline-none term-item" type="checkbox"/>
+<div class="flex-1">
+<p class="text-[#100d1b] dark:text-white text-sm font-semibold mb-1">제6조 (면책 조항)</p>
+<p class="text-gray-600 dark:text-gray-400 text-xs leading-relaxed">회사는 천재지변 또는 이용자의 귀책사유로 인한 서비스 장애나 손해에 대하여 책임을 지지 않습니다.</p>
+</div>
+</label>
+</div>
+<div class="p-4 bg-white dark:bg-gray-800 rounded-lg border border-[#e5e7eb] dark:border-gray-700">
+<label class="flex gap-x-3 items-start cursor-pointer">
+<input class="mt-1 h-5 w-5 rounded border-[#d3cfe7] border-2 bg-transparent text-primary checked:bg-primary checked:border-primary checked:bg-[image:--checkbox-tick-svg] focus:ring-0 focus:ring-offset-0 focus:border-[#d3cfe7] focus:outline-none term-item" type="checkbox"/>
+<div class="flex-1">
+<p class="text-[#100d1b] dark:text-white text-sm font-semibold mb-1">제7조 (관할 법원)</p>
+<p class="text-gray-600 dark:text-gray-400 text-xs leading-relaxed">본 서비스 이용과 관련하여 발생한 분쟁에 대해서는 회사의 본사 소재지를 관할하는 법원을 합의 관할 법원으로 합니다.</p>
+</div>
+</label>
+</div>
+</div>
+<div class="mb-4 space-y-1">
+<p class="text-[#100d1b] dark:text-white text-sm font-medium">날짜: 2024년 05월 22일</p>
+<p class="text-[#100d1b] dark:text-white text-sm font-medium">이름: 홍길동</p>
+</div>
+<div class="flex justify-between items-end mb-2 px-1">
+<h3 class="text-[#100d1b] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">서명란</h3>
+<button class="flex items-center gap-1 text-primary text-sm font-medium">
+<span class="material-symbols-outlined text-sm">refresh</span>
+                    다시 쓰기
+                </button>
+</div>
+<div class="relative w-full aspect-[2/1] bg-white dark:bg-gray-800 rounded-lg border-2 border-dashed border-[#d3cfe7] dark:border-gray-600 flex items-center justify-center overflow-hidden mb-3">
+<div class="absolute inset-0 opacity-10 signature-pad pointer-events-none"></div>
+<p class="text-gray-400 dark:text-gray-500 text-sm z-10">여기에 서명해 주세요</p>
+<div class="absolute bottom-4 right-4 text-gray-300 dark:text-gray-600">
+<span class="material-symbols-outlined text-4xl">edit</span>
+</div>
+</div>
+<p class="text-[11px] text-gray-500 dark:text-gray-400 text-center leading-normal mb-2">
+                본 서명은 전자서명법에 따라 법적 효력을 가집니다.
+            </p>
+</div>
+<div class="px-4 pb-10 pt-4 bg-background-light dark:bg-background-dark border-t border-gray-100 dark:border-gray-800 sticky bottom-0 z-20">
+<button class="w-full bg-primary hover:bg-primary/90 text-white font-bold py-4 rounded-xl text-lg transition-colors flex items-center justify-center gap-2">
+                동의 및 제출
+                <span class="material-symbols-outlined">send</span>
+</button>
+</div>
+</div>
+<script>
+        const checkAll = document.getElementById('checkAll');
+        const termItems = document.querySelectorAll('.term-item');
+        checkAll.addEventListener('change', (e) => {
+            termItems.forEach(item => {
+                item.checked = e.target.checked;
+            });
+        });
+        termItems.forEach(item => {
+            item.addEventListener('change', () => {
+                const allChecked = Array.from(termItems).every(i => i.checked);
+                checkAll.checked = allChecked;
+            });
+        });
+    </script>
+
+</body></html>

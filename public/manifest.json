@@ -1,0 +1,16 @@
+{
+  "short_name": "스마트나눔",
+  "name": "스마트나눔 - 편리한 기부 서비스",
+  "icons": [
+    {
+      "src": "icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#2563eb",
+  "background_color": "#ffffff"
+}

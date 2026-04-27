@@ -1,0 +1,105 @@
+[TAILING] Tailing last 50 lines for [smartnanum-server] process (change the value with --lines option)
+/root/.pm2/logs/smartnanum-server-out.log last 50 lines:
+0|smartnan | Firebase Admin SDK 초기화 성공
+0|smartnan | Firebase Admin SDK 초기화 성공
+0|smartnan | Firebase Admin SDK 초기화 성공
+0|smartnan | Firebase Admin SDK 초기화 성공
+0|smartnan | Firebase Admin SDK 초기화 성공
+0|smartnan | Firebase Admin SDK 초기화 성공
+0|smartnan | Firebase Admin SDK 초기화 성공
+0|smartnan | Firebase Admin SDK 초기화 성공
+0|smartnan | Firebase Admin SDK 초기화 성공
+0|smartnan | Firebase Admin SDK 초기화 성공
+0|smartnan | Firebase Admin SDK 초기화 성공
+0|smartnan | Firebase Admin SDK 초기화 성공
+0|smartnan | 서버가 포트 3000에서 작동 중입니다.
+0|smartnan | [0mGET / [32m200[0m 4.807 ms - 1042[0m
+0|smartnan | [0mGET /assets/index-HtGcNqgk.css [32m200[0m 1.415 ms - 49291[0m
+0|smartnan | [0mGET /manifest.json [32m200[0m 0.733 ms - 344[0m
+0|smartnan | [0mGET /assets/index-D-0c5Z0g.js [32m200[0m 1.694 ms - 499139[0m
+0|smartnan | [0mGET /guide0.png [32m200[0m 1.073 ms - 434176[0m
+0|smartnan | [0mGET /guide1.png [32m200[0m 0.973 ms - 1760634[0m
+0|smartnan | [0mGET /guide2.png [32m200[0m 0.679 ms - 1519981[0m
+0|smartnan | [0mPOST /api/auth/login [32m200[0m 116.438 ms - 338[0m
+0|smartnan | [0mGET /dashboard [32m200[0m 1.634 ms - 1042[0m
+0|smartnan | [0mGET /assets/index-D-0c5Z0g.js [36m304[0m 0.986 ms - -[0m
+0|smartnan | [0mGET /assets/index-HtGcNqgk.css [36m304[0m 1.090 ms - -[0m
+0|smartnan | [0mGET /manifest.json [36m304[0m 0.377 ms - -[0m
+0|smartnan | [0mGET /icon.png [32m200[0m 0.837 ms - 469831[0m
+0|smartnan | [0mPOST /api/auth/log-sms [31m500[0m 6.879 ms - 61[0m
+0|smartnan | [0mPUT /api/auth/profile [32m200[0m 5.758 ms - 227[0m
+0|smartnan | Firebase Admin SDK 초기화 성공
+0|smartnan | 서버가 포트 3000에서 작동 중입니다.
+0|smartnan | Attempting to log SMS: log_id=SMS2604260000001, hpno=01000000000, category=CHECK_FIX
+0|smartnan | ✅ SMS Log successfully saved to TB_SMS_LOG
+0|smartnan | [0mPOST /api/auth/log-sms [32m200[0m 43.877 ms - 78[0m
+0|smartnan | Firebase Admin SDK 초기화 성공
+0|smartnan | 서버가 포트 3000에서 작동 중입니다.
+0|smartnan | Firebase Admin SDK 초기화 성공
+0|smartnan | 서버가 포트 3000에서 작동 중입니다.
+0|smartnan | [0mGET /guide0.png [32m200[0m 5.182 ms - 434176[0m
+0|smartnan | [0mGET /guide2.png [32m200[0m 2.846 ms - 1519981[0m
+0|smartnan | [0mGET /guide1.png [32m200[0m 4.976 ms - 1760634[0m
+0|smartnan | [0mPOST /api/auth/log-sms [32m200[0m 120.471 ms - 78[0m
+0|smartnan | [0mPOST /api/auth/check-id [32m200[0m 2.021 ms - 70[0m
+0|smartnan | [0mPOST /api/auth/register [32m201[0m 99.604 ms - 52[0m
+0|smartnan | [0mPOST /api/auth/check-phone-exists [33m404[0m 2.741 ms - 65[0m
+0|smartnan | [0mPOST /api/auth/check-phone-exists [33m404[0m 1.397 ms - 65[0m
+0|smartnan | [0mPOST /api/auth/check-phone-exists [33m404[0m 1.601 ms - 65[0m
+0|smartnan | Firebase Admin SDK 초기화 성공
+0|smartnan | 서버가 포트 3000에서 작동 중입니다.
+0|smartnan | Firebase Admin SDK 초기화 성공
+0|smartnan | 서버가 포트 3000에서 작동 중입니다.
+
+/root/.pm2/logs/smartnanum-server-error.log last 50 lines:
+0|smartnan |   port: 3000
+0|smartnan | }
+0|smartnan | Error: listen EADDRINUSE: address already in use :::3000
+0|smartnan |     at Server.setupListenHandle [as _listen2] (node:net:1908:16)
+0|smartnan |     at listenInCluster (node:net:1965:12)
+0|smartnan |     at Server.listen (node:net:2067:7)
+0|smartnan |     at Function.listen (/root/smartnanum/server/node_modules/express/lib/application.js:635:24)
+0|smartnan |     at Object.<anonymous> (/root/smartnanum/server/app.js:41:5)
+0|smartnan |     at Module._compile (node:internal/modules/cjs/loader:1521:14)
+0|smartnan |     at Module._extensions..js (node:internal/modules/cjs/loader:1623:10)
+0|smartnan |     at Module.load (node:internal/modules/cjs/loader:1266:32)
+0|smartnan |     at Module._load (node:internal/modules/cjs/loader:1091:12)
+0|smartnan |     at Object.<anonymous> (/usr/lib/node_modules/pm2/lib/ProcessContainerFork.js:33:23) {
+0|smartnan |   code: 'EADDRINUSE',
+0|smartnan |   errno: -98,
+0|smartnan |   syscall: 'listen',
+0|smartnan |   address: '::',
+0|smartnan |   port: 3000
+0|smartnan | }
+0|smartnan | SMS 로그 저장 중 에러: Error: Data too long for column 'send_category' at row 1
+0|smartnan |     at exports.logSMS (/root/smartnanum/server/controllers/authController.js:533:14)
+0|smartnan |     at process.processTicksAndRejections (node:internal/process/task_queues:95:5) {
+0|smartnan |   code: 'ER_DATA_TOO_LONG',
+0|smartnan |   errno: 1406,
+0|smartnan |   sqlState: '22001',
+0|smartnan |   sqlMessage: "Data too long for column 'send_category' at row 1",
+0|smartnan |   sql: 'INSERT INTO TB_SMS_LOG (log_id, cust_no, receiver_phone, msg_content, msg_type, send_stat, send_category) VALUES (?, ?, ?, ?, ?, ?, ?)'
+0|smartnan | }
+0|smartnan | SyntaxError: Bad escaped character in JSON at position 8
+0|smartnan |     at JSON.parse (<anonymous>)
+0|smartnan |     at parse (/root/smartnanum/server/node_modules/body-parser/lib/types/json.js:92:19)
+0|smartnan |     at /root/smartnanum/server/node_modules/body-parser/lib/read.js:128:18
+0|smartnan |     at AsyncResource.runInAsyncScope (node:async_hooks:206:9)
+0|smartnan |     at invokeCallback (/root/smartnanum/server/node_modules/raw-body/index.js:238:16)
+0|smartnan |     at done (/root/smartnanum/server/node_modules/raw-body/index.js:227:7)
+0|smartnan |     at IncomingMessage.onEnd (/root/smartnanum/server/node_modules/raw-body/index.js:287:7)
+0|smartnan |     at IncomingMessage.emit (node:events:524:28)
+0|smartnan |     at endReadableNT (node:internal/streams/readable:1698:12)
+0|smartnan |     at process.processTicksAndRejections (node:internal/process/task_queues:82:21)
+0|smartnan | SyntaxError: Bad escaped character in JSON at position 8
+0|smartnan |     at JSON.parse (<anonymous>)
+0|smartnan |     at parse (/root/smartnanum/server/node_modules/body-parser/lib/types/json.js:92:19)
+0|smartnan |     at /root/smartnanum/server/node_modules/body-parser/lib/read.js:128:18
+0|smartnan |     at AsyncResource.runInAsyncScope (node:async_hooks:206:9)
+0|smartnan |     at invokeCallback (/root/smartnanum/server/node_modules/raw-body/index.js:238:16)
+0|smartnan |     at done (/root/smartnanum/server/node_modules/raw-body/index.js:227:7)
+0|smartnan |     at IncomingMessage.onEnd (/root/smartnanum/server/node_modules/raw-body/index.js:287:7)
+0|smartnan |     at IncomingMessage.emit (node:events:524:28)
+0|smartnan |     at endReadableNT (node:internal/streams/readable:1698:12)
+0|smartnan |     at process.processTicksAndRejections (node:internal/process/task_queues:82:21)
+

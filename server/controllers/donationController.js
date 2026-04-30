@@ -18,7 +18,7 @@ exports.getInitData = async (req, res) => {
     }
     const custNo = user[0].cust_no;
 
-    const [endDateInfo] = await db.execute('SELECT end_date FROM enddate WHERE yy = ?', [currentYear]);
+    const [endDateInfo] = await db.execute('SELECT endDate AS end_date FROM endDate WHERE dona_yy = ?', [currentYear]);
     
     // 당해년도 마스터 조회
     const [currentMaster] = await db.execute(
@@ -107,7 +107,7 @@ exports.applyDonation = async (req, res) => {
     console.log('트랜잭션 시작...');
 
     // 1. 마감일 체크
-    const [endDateInfo] = await connection.execute('SELECT end_date FROM enddate WHERE yy = ?', [currentYear]);
+    const [endDateInfo] = await connection.execute('SELECT endDate AS end_date FROM endDate WHERE dona_yy = ?', [currentYear]);
     if (endDateInfo.length > 0) {
       const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '.');
       if (todayStr > endDateInfo[0].end_date) {

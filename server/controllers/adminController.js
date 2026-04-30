@@ -419,7 +419,7 @@ const adminController = {
   // 마감일 목록 조회
   getEndDates: async (req, res) => {
     try {
-      const [rows] = await db.execute('SELECT * FROM endDate ORDER BY yy DESC');
+      const [rows] = await db.execute('SELECT dona_yy AS yy, endDate AS end_date, reg_date, reg_id, upd_date, upd_id FROM endDate ORDER BY dona_yy DESC');
       res.json(rows);
     } catch (error) {
       console.error('마감일 조회 오류:', error);
@@ -433,7 +433,7 @@ const adminController = {
     try {
       // ON DUPLICATE KEY UPDATE를 사용하여 존재하면 업데이트, 없으면 삽입
       await db.execute(
-        'INSERT INTO endDate (yy, end_date, reg_id, upd_id) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE end_date = ?, upd_id = ?, upd_date = NOW()',
+        'INSERT INTO endDate (dona_yy, endDate, reg_id, upd_id) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE endDate = ?, upd_id = ?, upd_date = NOW()',
         [yy, end_date, reg_id, reg_id, end_date, reg_id]
       );
       res.json({ message: `${yy}년도 마감일이 설정되었습니다.` });
@@ -447,7 +447,7 @@ const adminController = {
   deleteEndDate: async (req, res) => {
     const { yy } = req.params;
     try {
-      await db.execute('DELETE FROM endDate WHERE yy = ?', [yy]);
+      await db.execute('DELETE FROM endDate WHERE dona_yy = ?', [yy]);
       res.json({ message: `${yy}년도 마감 설정이 삭제되었습니다.` });
     } catch (error) {
       console.error('마감일 삭제 오류:', error);
@@ -2217,7 +2217,7 @@ const adminController = {
   getDonationYears: async (req, res) => {
     try {
       // endDate 테이블에서 관리 중인 년도 목록을 가져옵니다.
-      const [rows] = await db.execute('SELECT DISTINCT yy FROM endDate ORDER BY yy DESC');
+      const [rows] = await db.execute('SELECT DISTINCT dona_yy AS yy FROM endDate ORDER BY dona_yy DESC');
       
       let years = [];
       if (rows.length > 0) {

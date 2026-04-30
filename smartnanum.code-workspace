@@ -4,5 +4,8 @@
 			"name": "smartnanum",
 			"path": "."
 		}
-	]
+	],
+	"settings": {
+		"git.ignoreLimitWarning": true
+	}
 }

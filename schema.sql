@@ -232,3 +232,28 @@ CREATE TABLE `TB_SMS_LOG` (
   `reg_date` datetime DEFAULT current_timestamp() COMMENT '�Է��Ͻ�',
   PRIMARY KEY (`log_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='���� �� �˸��� �߼� �̷� ����';
+
+CREATE TABLE `product_stock_master` (
+  `client_no` varchar(10) NOT NULL,
+  `product_code` varchar(10) NOT NULL,
+  `current_stock` double DEFAULT NULL,
+  `last_receipt_date` date DEFAULT NULL,
+  `last_release_date` date DEFAULT NULL,
+  PRIMARY KEY (`client_no`,`product_code`),
+  KEY `product_code` (`product_code`),
+  CONSTRAINT `product_stock_master_ibfk_1` FOREIGN KEY (`client_no`) REFERENCES `client_master` (`client_no`),
+  CONSTRAINT `product_stock_master_ibfk_2` FOREIGN KEY (`product_code`) REFERENCES `product_master` (`product_code`),
+  CONSTRAINT `chk_stock_nonneg` CHECK (`current_stock` >= 0)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
+
+CREATE TABLE `referral` (
+  `id` int(11) NOT NULL COMMENT '추천인일련번호',
+  `name` varchar(50) NOT NULL COMMENT '추천인이름',
+  `referral_code` varchar(20) NOT NULL COMMENT '추천인번호',
+  `pw` varchar(256) NOT NULL COMMENT '비밀번호',
+  `hpno` varchar(20) NOT NULL COMMENT '휴대폰번호',
+  `email_add` varchar(50) NOT NULL COMMENT '이메일',
+  `grade` varchar(2) NOT NULL COMMENT '등급',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `referral_code` (`referral_code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci COMMENT='추천인마스터';

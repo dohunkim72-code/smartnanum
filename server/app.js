@@ -18,6 +18,7 @@ app.use(express.static(path.join(__dirname, '../dist')));
 // API 라우터 연결
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/donation', require('./routes/donationRoutes'));
+app.use('/api/admin', require('./routes/adminRoutes'));
 
 // 모든 기타 경로는 프론트엔드 index.html로 연결 (React Router 대응)
 app.get('*', (req, res) => {

@@ -36,6 +36,8 @@ def deploy():
                 ssh.exec_command(f"mkdir -p {remote_dir}")
                 
                 for file in files:
+                    if file == '.env':
+                        continue
                     local_file = os.path.join(root, file)
                     remote_file = os.path.join(remote_dir, file).replace('\\', '/')
                     scp.put(local_file, remote_file)

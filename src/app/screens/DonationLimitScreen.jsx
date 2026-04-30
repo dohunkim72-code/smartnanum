@@ -14,8 +14,8 @@ import BottomNav from '../components/BottomNav';
  */
 const DonationLimitScreen = () => {
   const navigate = useNavigate();
-  const [salary, setSalary] = useState('50,000,000');
-  const [plannedDonation, setPlannedDonation] = useState('0'); // 초기값 0으로 변경
+  const [salary, setSalary] = useState('0');
+  const [plannedDonation, setPlannedDonation] = useState('0');
   const [donationType, setDonationType] = useState('annual'); // 'annual' or 'monthly'
 
   // 로그인 여부 확인 (localStorage 기반)
@@ -135,56 +135,47 @@ const DonationLimitScreen = () => {
         {/* 정확한 입력을 위한 가이드 */}
         <section className="bg-white rounded-[2rem] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-50">
           <div className="flex flex-col gap-6">
-            <div 
-              onClick={() => setShowGuide(!showGuide)}
-              className="flex items-center justify-between cursor-pointer group"
-            >
-              <h3 className="text-[16px] font-black flex items-center gap-2.5 text-slate-900">
-                <span className="material-symbols-outlined text-amber-500 bg-amber-50 p-2 rounded-xl text-xl font-bold">tips_and_updates</span>
-                입력 가이드
-              </h3>
-              <span className={`material-symbols-outlined text-slate-400 transition-transform duration-300 ${showGuide ? 'rotate-180' : ''}`}>
-                expand_more
-              </span>
-            </div>
+            <h3 className="text-[16px] font-black flex items-center gap-2.5 text-slate-900">
+              <span className="material-symbols-outlined text-amber-500 bg-amber-50 p-2 rounded-xl text-xl font-bold">tips_and_updates</span>
+              입력 가이드
+            </h3>
 
-            {showGuide && (
-              <div className="bg-slate-50/50 rounded-3xl p-5 border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-500">
-                {donationType === 'annual' ? (
-                  <div className="flex flex-col gap-5">
-                    <div className="w-full rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-white group cursor-pointer">
-                      <img
-                        src="/annual_guide.png"
-                        alt="연봉 가이드"
-                        className="w-full h-auto object-cover transform group-hover:scale-110 transition-transform duration-1000"
-                      />
-                    </div>
-                    <div className="flex gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                      <span className="bg-red-50 text-red-600 px-2.5 py-1 rounded-lg font-black text-[11px] shrink-0 h-fit border border-red-100">必</span>
-                      <p className="text-[14px] text-slate-700 leading-relaxed font-semibold">
-                        근로소득 원천징수서 영수증의 <span className="bg-yellow-100 text-yellow-800 font-black px-1.5 py-0.5 rounded-md border border-yellow-200 mx-0.5 shadow-sm">23. 근로소득금액</span>을 입력하시면 가장 정확합니다.
-                      </p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-5">
-                    <div className="w-full aspect-[4/5] bg-white rounded-2xl flex items-center justify-center overflow-hidden border border-slate-200 shadow-sm relative group bg-slate-50">
-                      <img 
-                        src="/monthly_guide_v2.png" 
-                        alt="월급 가이드" 
-                        className="w-full h-auto object-contain transform group-hover:scale-105 transition-transform duration-700"
-                      />
-                    </div>
-                    <div className="flex gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                      <span className="bg-primary/5 text-primary px-2.5 py-1 rounded-lg font-black text-[11px] shrink-0 h-fit border border-primary/10 uppercase tracking-tight">Info</span>
-                      <p className="text-[14px] text-slate-700 leading-relaxed font-semibold">
-                        월 급여 입력 시: <span className="text-primary font-black underline underline-offset-4 decoration-primary/20">급여계 - 식대 - 교통비 - 육아근로수당</span>을 뺀 순수 급여 금액을 입력해 주세요.
-                      </p>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+            <div className="flex flex-col gap-4">
+              {donationType === 'annual' ? (
+                <div className="flex gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                  <span className="bg-red-50 text-red-600 px-2.5 py-1 rounded-lg font-black text-[11px] shrink-0 h-fit border border-red-100">必</span>
+                  <p className="text-[14px] text-slate-700 leading-relaxed font-semibold">
+                    근로소득 원천징수서 영수증의 <span className="bg-yellow-100 text-yellow-800 font-black px-1.5 py-0.5 rounded-md border border-yellow-200 mx-0.5 shadow-sm">23. 근로소득금액</span>을 입력하시면 가장 정확합니다.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-sm">
+                  <span className="bg-primary/5 text-primary px-2.5 py-1 rounded-lg font-black text-[11px] shrink-0 h-fit border border-primary/10 uppercase tracking-tight">Info</span>
+                  <p className="text-[14px] text-slate-700 leading-relaxed font-semibold">
+                    월 급여 입력 시: <span className="text-primary font-black underline underline-offset-4 decoration-primary/20">급여계 - 식대 - 교통비 - 육아근로수당</span>을 뺀 순수 급여 금액을 입력해 주세요.
+                  </p>
+                </div>
+              )}
+
+              {/* 이미지 토글 버튼 */}
+              <button
+                onClick={() => setShowGuide(!showGuide)}
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-slate-200 text-[13px] font-bold text-slate-500 hover:bg-slate-50 transition-all active:scale-95"
+              >
+                <span className="material-symbols-outlined text-lg">{showGuide ? 'visibility_off' : 'visibility'}</span>
+                {showGuide ? '설명 이미지 숨기기' : '설명 이미지 보기'}
+              </button>
+
+              {showGuide && (
+                <div className="mt-2 rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-white animate-in fade-in zoom-in-95 duration-300">
+                  <img
+                    src={donationType === 'annual' ? "/annual_guide.png" : "/monthly_guide_v2.png"}
+                    alt="입력 가이드 이미지"
+                    className="w-full h-auto object-contain"
+                  />
+                </div>
+              )}
+            </div>
           </div>
         </section>
 

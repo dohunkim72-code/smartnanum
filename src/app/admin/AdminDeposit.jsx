@@ -19,21 +19,39 @@ import {
  */
 const AdminDeposit = () => {
   const [deposits, setDeposits] = useState([]);
+  const [years, setYears] = useState([]); // 년도 목록
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString()); // 선택된 년도 (기본값: 올해)
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('01'); // 01: 입금 대기
+  const [statusFilter, setStatusFilter] = useState('04'); // 04: 입금 대기 (사용자 정의 기준)
   const [statusModal, setStatusModal] = useState({ show: false, type: 'success', message: '' });
+
+  // 년도 목록 조회
+  const fetchYears = async () => {
+    try {
+      const response = await fetch('/api/admin/donation/years', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      const data = await response.json();
+      if (data && data.length > 0) {
+        setYears(data);
+      } else {
+        setYears([new Date().getFullYear().toString()]);
+      }
+    } catch (error) {
+      console.error('Fetch years error:', error);
+      setYears([new Date().getFullYear().toString()]);
+    }
+  };
 
   // 입금 대기 목록 조회
   const fetchDeposits = async () => {
     setIsLoading(true);
     try {
-      // 기부 신청 관리와 동일한 API를 사용하되, 필터링 로직을 강화하거나 전용 엔드포인트를 고려할 수 있습니다.
-      const response = await fetch('/api/admin/donations');
+      const response = await fetch('/api/admin/donations', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       const data = await response.json();
-      
-      // 실제 서비스에서는 서버에서 필터링해서 가져오는 것이 좋지만, 
-      // 여기서는 우선 전체를 가져와 프론트엔드에서 필터링합니다.
       setDeposits(data || []);
     } catch (error) {
       console.error('Fetch deposits error:', error);
@@ -44,6 +62,7 @@ const AdminDeposit = () => {
   };
 
   useEffect(() => {
+    fetchYears();
     fetchDeposits();
   }, []);
 
@@ -63,7 +82,10 @@ const AdminDeposit = () => {
       
       const response = await fetch(`/api/admin/donations`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({
           ...item,
           real_amt: realAmt,
@@ -73,7 +95,7 @@ const AdminDeposit = () => {
       });
 
       if (response.ok) {
-        showStatus('success', `${item.name}님의 입금 처리가 완료되었습니다.`);
+        showStatus('success', `${item.cust_name}님의 입금 처리가 완료되었습니다.`);
         fetchDeposits();
       } else {
         showStatus('error', '입금 처리 중 오류가 발생했습니다.');
@@ -86,9 +108,13 @@ const AdminDeposit = () => {
 
   // 필터링된 목록
   const filteredDeposits = deposits.filter(item => {
-    const matchesSearch = (item.name || '').includes(searchTerm) || (item.hpno || '').includes(searchTerm);
-    const matchesStatus = statusFilter === 'all' || item.step_code === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesSearch = (item.cust_name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                        (item.hpno || '').includes(searchTerm);
+    const matchesStatus = statusFilter === 'all' || 
+                        (statusFilter === '04' && item.deposit_yn !== 'Y') ||
+                        (statusFilter === '02' && item.deposit_yn === 'Y');
+    const matchesYear = selectedYear === 'all' || String(item.dona_yy) === selectedYear;
+    return matchesSearch && matchesStatus && matchesYear;
   });
 
   return (
@@ -126,9 +152,9 @@ const AdminDeposit = () => {
             <Clock size={24} />
           </div>
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">입금 대기</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">입금 대기 ({selectedYear === 'all' ? '전체' : selectedYear + '년'})</p>
             <h3 className="text-2xl font-black text-slate-900">
-              {deposits.filter(d => d.step_code === '01').length} <span className="text-sm font-medium text-slate-400">건</span>
+              {deposits.filter(d => d.deposit_yn !== 'Y' && (selectedYear === 'all' || String(d.dona_yy) === selectedYear)).length} <span className="text-sm font-medium text-slate-400">건</span>
             </h3>
           </div>
         </div>
@@ -137,9 +163,9 @@ const AdminDeposit = () => {
             <CheckCircle2 size={24} />
           </div>
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">오늘 완료</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">입금 완료 ({selectedYear === 'all' ? '전체' : selectedYear + '년'})</p>
             <h3 className="text-2xl font-black text-slate-900">
-              {deposits.filter(d => d.step_code === '02').length} <span className="text-sm font-medium text-slate-400">건</span>
+              {deposits.filter(d => d.deposit_yn === 'Y' && (selectedYear === 'all' || String(d.dona_yy) === selectedYear)).length} <span className="text-sm font-medium text-slate-400">건</span>
             </h3>
           </div>
         </div>
@@ -148,17 +174,37 @@ const AdminDeposit = () => {
             <Wallet size={24} />
           </div>
           <div>
-            <p className="text-xs font-bold text-blue-400 uppercase tracking-tighter">총 대기 금액</p>
+            <p className="text-xs font-bold text-blue-400 uppercase tracking-tighter">총 미입금 금액</p>
             <h3 className="text-2xl font-black text-slate-900">
-              ₩{deposits.filter(d => d.step_code === '01').reduce((acc, curr) => acc + (curr.dona_amt || 0), 0).toLocaleString()}
+              ₩{deposits
+                .filter(d => d.deposit_yn !== 'Y' && (selectedYear === 'all' || String(d.dona_yy) === selectedYear))
+                .reduce((acc, curr) => acc + (curr.unpaid_amt || 0), 0)
+                .toLocaleString()}
             </h3>
           </div>
         </div>
       </div>
 
       {/* 필터 및 검색 바 */}
-      <div className="bg-white p-4 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row gap-4">
-        <div className="flex-1 relative">
+      <div className="bg-white p-4 rounded-[1.5rem] border border-slate-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
+        {/* 년도 선택 추가 */}
+        <div className="flex items-center gap-2 min-w-[120px]">
+          <div className="relative w-full">
+            <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 transition-all font-bold text-slate-700 appearance-none cursor-pointer"
+            >
+              <option value="all">전체 년도</option>
+              {years.map(y => (
+                <option key={y} value={y}>{y}년</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex-1 relative w-full">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input 
             type="text" 
@@ -171,8 +217,8 @@ const AdminDeposit = () => {
         <div className="flex items-center gap-2">
           <div className="flex bg-slate-50 p-1 rounded-xl border border-slate-100">
             <button 
-              onClick={() => setStatusFilter('01')}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${statusFilter === '01' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+              onClick={() => setStatusFilter('04')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${statusFilter === '04' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
             >
               입금 대기
             </button>
@@ -198,31 +244,33 @@ const AdminDeposit = () => {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
-                <th className="px-8 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider">신청일 / 기부자</th>
-                <th className="px-8 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider">기부 정보</th>
-                <th className="px-8 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-right">금액 현황</th>
-                <th className="px-8 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-center">상태</th>
-                <th className="px-8 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-center">작업</th>
+                <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider">신청일 / 기부자</th>
+                <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-right">기부 신청액</th>
+                <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-right">물품 대금</th>
+                <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-right">입금액</th>
+                <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-right text-rose-500">미입금액</th>
+                <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-center">상태</th>
+                <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-center">작업</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {isLoading ? (
                 <tr>
-                  <td colSpan="5" className="px-8 py-20 text-center">
+                  <td colSpan="7" className="px-8 py-20 text-center">
                     <RefreshCw className="w-10 h-10 text-blue-500 animate-spin mx-auto mb-4" />
                     <p className="text-slate-400 font-bold">데이터를 불러오는 중입니다...</p>
                   </td>
                 </tr>
               ) : filteredDeposits.length > 0 ? (
                 filteredDeposits.map((item) => (
-                  <tr key={`${item.cust_no}-${item.dona_yy}-${item.seq_no}`} className="hover:bg-slate-50/50 transition-colors group">
-                    <td className="px-8 py-6">
+                  <tr key={`${item.cust_no}-${item.dona_yy}`} className="hover:bg-slate-50/50 transition-colors group">
+                    <td className="px-6 py-6">
                       <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-slate-100 rounded-2xl flex items-center justify-center font-black text-slate-600 group-hover:bg-blue-100 group-hover:text-blue-600 transition-all">
-                          {item.name ? item.name[0] : 'U'}
+                        <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center font-black text-slate-600 group-hover:bg-blue-100 group-hover:text-blue-600 transition-all">
+                          {item.cust_name ? item.cust_name[0] : 'U'}
                         </div>
                         <div>
-                          <p className="text-[15px] font-black text-slate-900">{item.name}</p>
+                          <p className="text-[14px] font-black text-slate-900">{item.cust_name}</p>
                           <div className="flex items-center gap-1.5 text-slate-400 mt-0.5">
                             <Calendar size={12} />
                             <span className="text-xs font-bold">{new Date(item.reg_date).toLocaleDateString()}</span>
@@ -230,32 +278,32 @@ const AdminDeposit = () => {
                         </div>
                       </div>
                     </td>
-                    <td className="px-8 py-6">
-                      <div className="space-y-1">
-                        <p className="text-sm font-bold text-slate-700">{item.company_name || '개인 기부'}</p>
-                        <p className="text-xs text-slate-400 font-medium italic">{item.hpno}</p>
-                      </div>
+                    <td className="px-6 py-6 text-right">
+                      <p className="text-sm font-black text-slate-900">₩{(item.dona_amt || 0).toLocaleString()}</p>
                     </td>
-                    <td className="px-8 py-6 text-right">
-                      <div className="space-y-1">
-                        <p className="text-sm font-black text-slate-900">₩{(item.dona_amt || 0).toLocaleString()}</p>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">신청 금액</p>
-                      </div>
+                    <td className="px-6 py-6 text-right">
+                      <p className="text-sm font-bold text-slate-600">₩{(item.goods_amt || 0).toLocaleString()}</p>
                     </td>
-                    <td className="px-8 py-6 text-center">
-                      <span className={`px-3 py-1 rounded-full text-[11px] font-black tracking-tight ${
-                        item.step_code === '02' 
+                    <td className="px-6 py-6 text-right">
+                      <p className="text-sm font-bold text-emerald-600">₩{(item.deposit_amt || 0).toLocaleString()}</p>
+                    </td>
+                    <td className="px-6 py-6 text-right">
+                      <p className="text-sm font-black text-rose-500">₩{(item.unpaid_amt || 0).toLocaleString()}</p>
+                    </td>
+                    <td className="px-6 py-6 text-center">
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black tracking-tight ${
+                        item.deposit_yn === 'Y' 
                           ? 'bg-emerald-100 text-emerald-600 border border-emerald-200' 
                           : 'bg-amber-100 text-amber-600 border border-amber-200'
                       }`}>
-                        {item.step_code === '02' ? '입금 완료' : '입금 대기'}
+                        {item.deposit_yn === 'Y' ? '입금 완료' : '입금 대기'}
                       </span>
                     </td>
-                    <td className="px-8 py-6 text-center">
-                      {item.step_code === '01' ? (
+                    <td className="px-6 py-6 text-center">
+                      {item.deposit_yn !== 'Y' ? (
                         <button 
                           onClick={() => handleConfirmDeposit(item)}
-                          className="px-5 py-2 bg-blue-600 text-white rounded-xl text-xs font-black hover:bg-blue-700 transition-all hover:shadow-lg hover:shadow-blue-200 active:scale-95 flex items-center gap-2 mx-auto"
+                          className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[11px] font-black hover:bg-blue-700 transition-all hover:shadow-lg hover:shadow-blue-200 active:scale-95 flex items-center gap-2 mx-auto"
                         >
                           <CheckCircle2 size={14} />
                           입금 확인
@@ -271,7 +319,7 @@ const AdminDeposit = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5" className="px-8 py-20 text-center">
+                  <td colSpan="7" className="px-8 py-20 text-center">
                     <div className="flex flex-col items-center justify-center opacity-30">
                       <AlertCircle size={48} className="mb-4 text-slate-300" />
                       <p className="text-lg font-bold text-slate-400">조회된 입금 내역이 없습니다.</p>

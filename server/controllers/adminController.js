@@ -835,13 +835,18 @@ const adminController = {
       const { dona_yy, searchTerm, referral_code, step_code, deposit_yn } = req.query;
       let query = `
         SELECT 
-          d.*, c.name as cust_name, c.hpno as cust_hpno, c.referral_code,
-          r.name as referral_name,
-          m.jmin1, m.jmin2, m.address, m.address_detail
+          d.cust_no, d.dona_yy,
+          MAX(c.name) as cust_name, MAX(c.hpno) as hpno,
+          CASE WHEN MIN(d.step_code) = '02' THEN 'Y' ELSE 'N' END as deposit_yn,
+          SUM(d.dona_amt) as dona_amt,
+          SUM(d.deposit_amt) as deposit_amt,
+          SUM(d.goods_amt) as goods_amt,
+          (SUM(d.dona_amt) - SUM(d.deposit_amt)) as unpaid_amt,
+          MIN(d.step_code) as step_code,
+          MAX(d.reg_date) as reg_date
         FROM donation_detail d
         JOIN cust c ON d.cust_no = c.cust_no
-        JOIN donation_master m ON d.cust_no = m.cust_no AND d.dona_yy = m.dona_yy
-        LEFT JOIN referral r ON c.referral_code = r.referral_code
+        LEFT JOIN donation_master m ON d.cust_no = m.cust_no AND d.dona_yy = m.dona_yy
         WHERE 1=1
       `;
       const params = [];
@@ -867,13 +872,15 @@ const adminController = {
         params.push(step_code);
       }
 
-      if (deposit_yn === 'Y') {
-        query += ' AND d.real_amt > 0';
-      } else if (deposit_yn === 'N') {
-        query += ' AND (d.real_amt IS NULL OR d.real_amt = 0)';
+      if (deposit_yn) {
+        if (deposit_yn === 'Y') {
+          query += ' AND NOT EXISTS (SELECT 1 FROM donation_detail d2 WHERE d2.cust_no = d.cust_no AND d2.dona_yy = d.dona_yy AND d2.step_code != "02")';
+        } else {
+          query += ' AND EXISTS (SELECT 1 FROM donation_detail d2 WHERE d2.cust_no = d.cust_no AND d2.dona_yy = d.dona_yy AND d2.step_code = "04")';
+        }
       }
 
-      query += ' ORDER BY c.name ASC, d.reg_date DESC, d.seq_no DESC';
+      query += ' GROUP BY d.cust_no, d.dona_yy ORDER BY reg_date DESC';
       
       const [rows] = await db.execute(query, params);
       res.json(rows);
@@ -992,35 +999,91 @@ const adminController = {
       await connection.beginTransaction();
       const { 
         cust_no, dona_yy, seq_no, dona_amt, real_amt, step_code, company_name, receipt_yn,
-        name, hpno, jmin1, jmin2, zipcode, address, address_detail,
+        cust_name, name, hpno, jmin1, jmin2, zipcode, address, address_detail,
         agree1, agree2, agree3, agree4, agree5, agree6, agree7, agree8, agree9, agree10, agree11, agree12, agree13,
         signature, upd_id
       } = req.body;
+      const finalName = cust_name || name || '관리자';
 
-      // [추가] 수정 가능 상태 확인 ('01' 신청완료 상태만 수정 가능)
-      const [currentStatus] = await connection.execute(
-        'SELECT step_code FROM donation_detail WHERE cust_no = ? AND dona_yy = ? AND seq_no = ?',
-        [cust_no, dona_yy, seq_no]
-      );
-
-      if (!currentStatus[0] || currentStatus[0].step_code !== '01') {
-        await connection.rollback();
-        return res.status(403).json({ message: '신청완료(01) 상태인 내역만 수정할 수 있습니다.' });
+      // [추가] 수정 가능 상태 확인
+      let targetSeqNos = [];
+      if (seq_no) {
+        const [currentStatus] = await connection.execute(
+          'SELECT seq_no, step_code, dona_amt, real_amt FROM donation_detail WHERE cust_no = ? AND dona_yy = ? AND seq_no = ?',
+          [cust_no, dona_yy, seq_no]
+        );
+        if (currentStatus[0] && (currentStatus[0].step_code === '01' || currentStatus[0].step_code === '04')) {
+          targetSeqNos.push(currentStatus[0]);
+        }
+      } else {
+        // seq_no가 없으면 해당 기부자의 당해년도 모든 입금대기(04) 내역 조회
+        const [pendingList] = await connection.execute(
+          'SELECT seq_no, step_code, dona_amt, real_amt FROM donation_detail WHERE cust_no = ? AND dona_yy = ? AND step_code = "04"',
+          [cust_no, dona_yy]
+        );
+        targetSeqNos = pendingList;
       }
 
-      // 1. 상세 내역 수정
-      await connection.execute(
-        `UPDATE donation_detail SET 
-          dona_amt = ?, real_amt = ?, step_code = ?, company_name = ?, receipt_yn = ?, 
-          agree1=?, agree2=?, agree3=?, agree4=?, agree5=?, agree6=?, agree7=?, agree8=?, agree9=?, agree10=?, agree11=?, agree12=?, agree13=?,
-          signature=?, upd_id = ?, upd_date = NOW()
-        WHERE cust_no = ? AND dona_yy = ? AND seq_no = ?`,
-        [
-          dona_amt, real_amt, step_code, company_name, receipt_yn, 
-          agree1, agree2, agree3, agree4, agree5, agree6, agree7, agree8, agree9, agree10, agree11, agree12, agree13,
-          signature, upd_id, cust_no, dona_yy, seq_no
-        ]
-      );
+      if (targetSeqNos.length === 0) {
+        await connection.rollback();
+        return res.status(403).json({ message: '처리 가능한 내역이 없습니다.' });
+      }
+
+      // 1. 입금 완료 처리 로직 (step_code '02'인 경우)
+      if (step_code === '02') {
+        // (0) 현재 pre_deposit의 최대 seq_no 가져오기 (루프 밖에서 한 번만 조회)
+        const [preSeqResult] = await connection.execute(
+          'SELECT IFNULL(MAX(seq_no), 0) as max_seq FROM pre_deposit WHERE cust_no = ? AND dona_yy = ?',
+          [cust_no, dona_yy]
+        );
+        let nextPreSeq = preSeqResult[0].max_seq + 1;
+
+        for (const target of targetSeqNos) {
+          // (1) 상세 테이블 상태 및 금액 업데이트
+          await connection.execute(
+            'UPDATE donation_detail SET step_code = "02", deposit_amt = dona_amt, real_amt = dona_amt, upd_date = NOW(), upd_id = ? WHERE cust_no = ? AND dona_yy = ? AND seq_no = ?',
+            [upd_id || 'admin', cust_no, dona_yy, target.seq_no]
+          );
+
+          // (2) pre_deposit 테이블 저장 (nextPreSeq 사용)
+          await connection.execute(
+            `INSERT INTO pre_deposit (
+              dona_yy, cust_no, seq_no, deposit_type, deposit_amt, deposit_date, 
+              bank_name, account_no, account_holder, issuance_yn, reg_id, upd_id, reg_date, upd_date
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+            [
+              dona_yy, cust_no, nextPreSeq++, '입금확인', target.dona_amt, 
+              new Date().toISOString().slice(0, 10).replace(/-/g, ''), 
+              '관리자처리', '-', finalName, 'N', upd_id || 'admin', upd_id || 'admin'
+            ]
+          );
+        }
+
+        // (3) 마스터 테이블 업데이트 시간 갱신
+        await connection.execute(
+          'UPDATE donation_master SET upd_date = NOW() WHERE cust_no = ? AND dona_yy = ?',
+          [cust_no, dona_yy]
+        );
+      } else {
+        // 일반 수정 (seq_no가 있을 때만 가능)
+        if (!seq_no) {
+          await connection.rollback();
+          return res.status(400).json({ message: '상세 수정을 위해서는 seq_no가 필요합니다.' });
+        }
+        
+        await connection.execute(
+          `UPDATE donation_detail SET 
+            dona_amt = ?, real_amt = ?, step_code = ?, company_name = ?, receipt_yn = ?, 
+            agree1=?, agree2=?, agree3=?, agree4=?, agree5=?, agree6=?, agree7=?, agree8=?, agree9=?, agree10=?, agree11=?, agree12=?, agree13=?,
+            signature=?, upd_id = ?, upd_date = NOW()
+          WHERE cust_no = ? AND dona_yy = ? AND seq_no = ?`,
+          [
+            dona_amt, real_amt, step_code, company_name, receipt_yn, 
+            agree1, agree2, agree3, agree4, agree5, agree6, agree7, agree8, agree9, agree10, agree11, agree12, agree13,
+            signature, upd_id, cust_no, dona_yy, seq_no
+          ]
+        );
+      }
 
       // 2. 마스터 정보 수정
       await connection.execute(
@@ -1034,7 +1097,8 @@ const adminController = {
       // 3. 합계 갱신
       await connection.execute(
         `UPDATE donation_master m
-         SET total_dona_amt = (SELECT SUM(dona_amt) FROM donation_detail WHERE cust_no = m.cust_no AND dona_yy = m.dona_yy)
+         SET total_dona_amt = (SELECT SUM(dona_amt) FROM donation_detail WHERE cust_no = m.cust_no AND dona_yy = m.dona_yy),
+             total_real_amt = (SELECT SUM(deposit_amt) FROM donation_detail WHERE cust_no = m.cust_no AND dona_yy = m.dona_yy)
          WHERE cust_no = ? AND dona_yy = ?`,
         [cust_no, dona_yy]
       );

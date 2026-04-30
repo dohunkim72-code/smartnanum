@@ -15,11 +15,13 @@ import BottomNav from '../components/BottomNav';
 const DonationLimitScreen = () => {
   const navigate = useNavigate();
   const [salary, setSalary] = useState('50,000,000');
-  const [plannedDonation, setPlannedDonation] = useState('1,000,000'); // 기본값 설정
+  const [plannedDonation, setPlannedDonation] = useState('0'); // 초기값 0으로 변경
   const [donationType, setDonationType] = useState('annual'); // 'annual' or 'monthly'
 
   // 로그인 여부 확인 (localStorage 기반)
   const [isLoggedIn] = useState(localStorage.getItem('isLoggedIn') === 'true');
+
+  const [showGuide, setShowGuide] = useState(false); // 가이드 표시 상태 추가
 
   // 숫자에 콤마 추가/제거 핸들러
   const handleMoneyChange = (value, setter) => {
@@ -133,46 +135,56 @@ const DonationLimitScreen = () => {
         {/* 정확한 입력을 위한 가이드 */}
         <section className="bg-white rounded-[2rem] p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-50">
           <div className="flex flex-col gap-6">
-            <h3 className="text-[16px] font-black flex items-center gap-2.5 text-slate-900">
-              <span className="material-symbols-outlined text-amber-500 bg-amber-50 p-2 rounded-xl text-xl font-bold">tips_and_updates</span>
-              입력 가이드
-            </h3>
-
-            <div className="bg-slate-50/50 rounded-3xl p-5 border border-slate-100 overflow-hidden">
-              {donationType === 'annual' ? (
-                <div className="flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-500">
-                  <div className="w-full rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-white group cursor-pointer">
-                    <img
-                      src="/annual_guide.png"
-                      alt="연봉 가이드"
-                      className="w-full h-auto object-cover transform group-hover:scale-110 transition-transform duration-1000"
-                    />
-                  </div>
-                  <div className="flex gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                    <span className="bg-red-50 text-red-600 px-2.5 py-1 rounded-lg font-black text-[11px] shrink-0 h-fit border border-red-100">必</span>
-                    <p className="text-[14px] text-slate-700 leading-relaxed font-semibold">
-                      근로소득 원천징수서 영수증의 <span className="bg-yellow-100 text-yellow-800 font-black px-1.5 py-0.5 rounded-md border border-yellow-200 mx-0.5 shadow-sm">23. 근로소득금액</span>을 입력하시면 가장 정확합니다.
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-5 animate-in fade-in zoom-in-95 duration-500">
-                  <div className="w-full aspect-[4/5] bg-white rounded-2xl flex items-center justify-center overflow-hidden border border-slate-200 shadow-sm relative group bg-slate-50">
-                    <img 
-                      src="/monthly_guide_v2.png" 
-                      alt="월급 가이드" 
-                      className="w-full h-auto object-contain transform group-hover:scale-105 transition-transform duration-700"
-                    />
-                  </div>
-                  <div className="flex gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
-                    <span className="bg-primary/5 text-primary px-2.5 py-1 rounded-lg font-black text-[11px] shrink-0 h-fit border border-primary/10 uppercase tracking-tight">Info</span>
-                    <p className="text-[14px] text-slate-700 leading-relaxed font-semibold">
-                      월 급여 입력 시: <span className="text-primary font-black underline underline-offset-4 decoration-primary/20">급여계 - 식대 - 교통비 - 육아근로수당</span>을 뺀 순수 급여 금액을 입력해 주세요.
-                    </p>
-                  </div>
-                </div>
-              )}
+            <div 
+              onClick={() => setShowGuide(!showGuide)}
+              className="flex items-center justify-between cursor-pointer group"
+            >
+              <h3 className="text-[16px] font-black flex items-center gap-2.5 text-slate-900">
+                <span className="material-symbols-outlined text-amber-500 bg-amber-50 p-2 rounded-xl text-xl font-bold">tips_and_updates</span>
+                입력 가이드
+              </h3>
+              <span className={`material-symbols-outlined text-slate-400 transition-transform duration-300 ${showGuide ? 'rotate-180' : ''}`}>
+                expand_more
+              </span>
             </div>
+
+            {showGuide && (
+              <div className="bg-slate-50/50 rounded-3xl p-5 border border-slate-100 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-500">
+                {donationType === 'annual' ? (
+                  <div className="flex flex-col gap-5">
+                    <div className="w-full rounded-2xl overflow-hidden border border-slate-200 shadow-md bg-white group cursor-pointer">
+                      <img
+                        src="/annual_guide.png"
+                        alt="연봉 가이드"
+                        className="w-full h-auto object-cover transform group-hover:scale-110 transition-transform duration-1000"
+                      />
+                    </div>
+                    <div className="flex gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                      <span className="bg-red-50 text-red-600 px-2.5 py-1 rounded-lg font-black text-[11px] shrink-0 h-fit border border-red-100">必</span>
+                      <p className="text-[14px] text-slate-700 leading-relaxed font-semibold">
+                        근로소득 원천징수서 영수증의 <span className="bg-yellow-100 text-yellow-800 font-black px-1.5 py-0.5 rounded-md border border-yellow-200 mx-0.5 shadow-sm">23. 근로소득금액</span>을 입력하시면 가장 정확합니다.
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-5">
+                    <div className="w-full aspect-[4/5] bg-white rounded-2xl flex items-center justify-center overflow-hidden border border-slate-200 shadow-sm relative group bg-slate-50">
+                      <img 
+                        src="/monthly_guide_v2.png" 
+                        alt="월급 가이드" 
+                        className="w-full h-auto object-contain transform group-hover:scale-105 transition-transform duration-700"
+                      />
+                    </div>
+                    <div className="flex gap-3 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
+                      <span className="bg-primary/5 text-primary px-2.5 py-1 rounded-lg font-black text-[11px] shrink-0 h-fit border border-primary/10 uppercase tracking-tight">Info</span>
+                      <p className="text-[14px] text-slate-700 leading-relaxed font-semibold">
+                        월 급여 입력 시: <span className="text-primary font-black underline underline-offset-4 decoration-primary/20">급여계 - 식대 - 교통비 - 육아근로수당</span>을 뺀 순수 급여 금액을 입력해 주세요.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </section>
 
@@ -183,28 +195,6 @@ const DonationLimitScreen = () => {
           <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-indigo-500/10 rounded-full blur-[60px]"></div>
 
           <div className="flex flex-col gap-8 relative z-10">
-            {/* 기부 예정 금액 입력 */}
-            <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between">
-                <p className="text-white/40 text-[13px] font-black tracking-widest uppercase flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 bg-primary rounded-full"></span>
-                  기부 예정 금액
-                </p>
-              </div>
-              <div className="relative group/input">
-                <input
-                  type="text"
-                  value={plannedDonation}
-                  onChange={(e) => handleMoneyChange(e.target.value, setPlannedDonation)}
-                  className="w-full h-16 bg-white/5 border border-white/10 rounded-[1.25rem] px-6 text-3xl font-black text-white focus:bg-white/10 focus:border-primary/40 focus:ring-4 focus:ring-primary/20 outline-none transition-all shadow-inner"
-                  placeholder="0"
-                />
-                <span className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-white/30 text-xl">원</span>
-              </div>
-            </div>
-
-            <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent w-full"></div>
-
             {/* 계산 결과 그리드 */}
             <div className="grid grid-cols-1 gap-8">
               {/* 기부 한도 */}
@@ -228,6 +218,30 @@ const DonationLimitScreen = () => {
                   <span className="text-xl font-bold text-primary/80">원</span>
                 </div>
               </div>
+
+              <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent w-full"></div>
+
+              {/* 기부 예정 금액 입력 (추천 한도 아래로 이동) */}
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-white/40 text-[13px] font-black tracking-widest uppercase flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 bg-primary rounded-full"></span>
+                    기부 예정 금액 입력
+                  </p>
+                </div>
+                <div className="relative group/input">
+                  <input
+                    type="text"
+                    value={plannedDonation}
+                    onChange={(e) => handleMoneyChange(e.target.value, setPlannedDonation)}
+                    className="w-full h-16 bg-white/5 border border-white/10 rounded-[1.25rem] px-6 text-3xl font-black text-white focus:bg-white/10 focus:border-primary/40 focus:ring-4 focus:ring-primary/20 outline-none transition-all shadow-inner"
+                    placeholder="0"
+                  />
+                  <span className="absolute right-6 top-1/2 -translate-y-1/2 font-black text-white/30 text-xl">원</span>
+                </div>
+              </div>
+
+              <div className="h-px bg-gradient-to-r from-transparent via-white/10 to-transparent w-full"></div>
 
               {/* 예상 환급액 */}
               <div className="flex flex-col gap-5 pt-2">

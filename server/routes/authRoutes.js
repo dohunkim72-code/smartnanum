@@ -12,6 +12,9 @@ router.post('/register', authController.register);
 // /api/auth/check-id
 router.post('/check-id', authController.checkDuplicateId);
 
+// /api/auth/check-referral
+router.post('/check-referral', authController.checkReferralCode);
+
 // /api/auth/profile (회원정보 수정)
 router.put('/profile', authMiddleware, authController.updateProfile);
 

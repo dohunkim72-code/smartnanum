@@ -21,6 +21,7 @@ const RegisterScreen = () => {
   });
   const [loading, setLoading] = useState(false);
   const [isIdChecked, setIsIdChecked] = useState(false); // 아이디 중복 확인 여부
+  const [isReferralChecked, setIsReferralChecked] = useState(false); // 추천인 코드 확인 여부
   
   // 프리미엄 모달 상태
   const [modal, setModal] = useState({
@@ -55,6 +56,10 @@ const RegisterScreen = () => {
     // 아이디가 변경되면 다시 중복 확인을 하도록 리셋
     if (name === 'id') {
       setIsIdChecked(false);
+    }
+    // 추천인 코드가 변경되면 다시 확인을 하도록 리셋
+    if (name === 'referral_code') {
+      setIsReferralChecked(false);
     }
   };
 
@@ -96,6 +101,44 @@ const RegisterScreen = () => {
     }
   };
 
+  const handleCheckReferral = async () => {
+    if (!formData.referral_code) {
+      showAlert('알림', '추천인 코드를 입력해주세요!', 'info');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/auth/check-referral', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ referral_code: formData.referral_code }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        if (data.isValid) {
+          showAlert('확인 완료', data.message || '유효한 추천인 코드입니다! ✅', 'success');
+          setIsReferralChecked(true);
+          // 소개자 성명이 비어있으면 자동으로 채워줌
+          if (!formData.note && data.name) {
+            setFormData(prev => ({ ...prev, note: data.name }));
+          }
+        } else {
+          showAlert('확인 실패', data.message || '유효하지 않은 추천인 코드입니다. 😢', 'error');
+          setIsReferralChecked(false);
+        }
+      } else {
+        showAlert('오류', data.message || '확인 중 오류가 발생했습니다.', 'error');
+      }
+    } catch (error) {
+      console.error('추천인 확인 에러:', error);
+      showAlert('통신 오류', '서버 접속에 실패했습니다.', 'error');
+    }
+  };
+
   const handleRegister = async () => {
     if (!formData.id || !formData.pw || !formData.confirmPw || !formData.name || !formData.email || !formData.hpno || !formData.referral_code) {
       showAlert('알림', '필수 정보를 모두 입력해주세요! (추천인 코드 포함)', 'info');
@@ -109,6 +152,11 @@ const RegisterScreen = () => {
 
     if (!isIdChecked) {
       showAlert('알림', '아이디 중복 확인을 해주세요!', 'info');
+      return;
+    }
+
+    if (!isReferralChecked) {
+      showAlert('알림', '추천인 코드 확인을 해주세요!', 'info');
       return;
     }
 
@@ -440,16 +488,32 @@ const RegisterScreen = () => {
               <span className="material-symbols-outlined text-primary text-lg">redeem</span>
               추천인 정보 (필수)
             </p>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-3">
               <div className="flex flex-col">
                 <p className="text-xs text-[#594c9a] mb-1 px-1">추천인 코드</p>
-                <input 
-                  name="referral_code"
-                  value={formData.referral_code}
-                  onChange={handleChange}
-                  className="w-full rounded-lg border border-[#d3cfe7] bg-white h-12 placeholder:text-[#594c9a]/40 p-3 text-sm outline-none focus:border-primary focus:ring-0" 
-                  placeholder="4자리 코드"
-                />
+                <div className="flex gap-2">
+                  <div className="flex flex-1 items-stretch rounded-lg border border-[#d3cfe7] bg-white overflow-hidden focus-within:border-primary">
+                    <input 
+                      name="referral_code"
+                      value={formData.referral_code}
+                      onChange={handleChange}
+                      className="w-full border-none bg-transparent h-12 placeholder:text-[#594c9a]/40 p-3 text-sm outline-none focus:ring-0" 
+                      placeholder="코드 입력"
+                    />
+                    <div className="flex items-center px-2">
+                      {isReferralChecked && (
+                        <span className="material-symbols-outlined text-green-500 text-lg">check_circle</span>
+                      )}
+                    </div>
+                  </div>
+                  <button 
+                    type="button"
+                    onClick={handleCheckReferral}
+                    className={`px-3 rounded-lg font-bold text-xs shrink-0 whitespace-nowrap active:scale-95 transition-all ${isReferralChecked ? 'bg-green-100 text-green-600' : 'bg-primary/10 text-primary'}`}
+                  >
+                    {isReferralChecked ? '확인됨' : '확인'}
+                  </button>
+                </div>
               </div>
               <div className="flex flex-col">
                 <p className="text-xs text-[#594c9a] mb-1 px-1">소개자 성명</p>

@@ -215,8 +215,13 @@ exports.register = async (req, res) => {
       return res.status(400).json({ message: '이미 사용 중인 아이디입니다.' });
     }
 
-    // 추천인 코드 필수 체크
-    if (!referral_code) {
+    // 추천인 코드 유효성 확인
+    if (referral_code) {
+      const [referralRows] = await db.query('SELECT referral_code FROM referral WHERE referral_code = ?', [referral_code]);
+      if (referralRows.length === 0) {
+        return res.status(400).json({ message: '유효하지 않은 추천인 코드입니다.' });
+      }
+    } else {
       return res.status(400).json({ message: '추천인 코드는 필수 입력 항목입니다.' });
     }
 
@@ -766,5 +771,34 @@ exports.resetPasswordFinal = async (req, res) => {
   } catch (error) {
     console.error('비밀번호 변경 에러:', error);
     res.status(500).json({ success: false, message: '서버 오류가 발생했습니다.' });
+  }
+};
+
+// 추천인 코드 유효성 체크
+exports.checkReferralCode = async (req, res) => {
+  const { referral_code } = req.body;
+
+  if (!referral_code) {
+    return res.status(400).json({ message: '추천인 코드를 입력해주세요.' });
+  }
+
+  try {
+    const [rows] = await db.execute('SELECT name FROM referral WHERE referral_code = ?', [referral_code]);
+
+    if (rows.length > 0) {
+      return res.status(200).json({ 
+        isValid: true, 
+        name: rows[0].name,
+        message: `확인되었습니다. (${rows[0].name} 추천인)` 
+      });
+    } else {
+      return res.status(200).json({ 
+        isValid: false, 
+        message: '유효하지 않은 추천인 코드입니다.' 
+      });
+    }
+  } catch (error) {
+    console.error('추천인 코드 체크 에러:', error);
+    res.status(500).json({ message: '서버 에러가 발생했습니다.' });
   }
 };

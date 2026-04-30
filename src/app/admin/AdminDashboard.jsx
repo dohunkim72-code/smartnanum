@@ -30,7 +30,9 @@ const AdminDashboard = () => {
   React.useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await fetch('/api/admin/stats');
+        const response = await fetch('/api/admin/stats', {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
         const statsData = await response.json();
         setData(statsData);
       } catch (error) {

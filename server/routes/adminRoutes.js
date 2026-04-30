@@ -34,6 +34,7 @@ router.delete('/bank-info/:bank_code', adminController.deleteBankInfo);
 
 // 추천인 목록 API
 router.get('/referrals', adminController.getReferralList);
+router.get('/donation/years', adminController.getDonationYears);
 
 // 마감일 관리 API
 router.get('/closing-dates', adminController.getEndDates);

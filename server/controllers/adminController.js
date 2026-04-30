@@ -5,6 +5,7 @@ const path = require('path');
 const ExcelJS = require('exceljs');
 const dayjs = require('dayjs');
 const axios = require('axios');
+const jwt = require('jsonwebtoken');
 const numberToKorean = require('../utils/numberToKorean');
 
 // 엑셀 셀 값 설정을 위한 헬퍼 함수 (병합된 셀 대응)
@@ -82,7 +83,7 @@ const adminController = {
           SUM(dona_amt) as amt
         FROM donation_detail
         WHERE reg_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-        GROUP BY DATE_FORMAT(reg_date, '%Y-%m')
+        GROUP BY DATE_FORMAT(reg_date, '%Y-%m'), DATE_FORMAT(reg_date, '%m월')
         ORDER BY DATE_FORMAT(reg_date, '%Y-%m') ASC
       `);
 
@@ -233,8 +234,16 @@ const adminController = {
 
   // 관리자 로그인
   loginManager: async (req, res) => {
-    const { adminId, password } = req.body;
+    // 프론트엔드의 구/신 버전에 모두 대응하기 위해 adminId와 id 확인
+    const adminId = req.body.adminId || req.body.id;
+    const password = req.body.password;
+
+    if (!adminId || !password) {
+      return res.status(400).json({ success: false, message: '아이디와 비밀번호를 모두 입력해주세요.' });
+    }
+
     try {
+      // 1. 아이디로 관리자 조회
       const [rows] = await db.execute(
         'SELECT * FROM referral WHERE referral_code = ?',
         [adminId]
@@ -243,33 +252,57 @@ const adminController = {
       if (rows.length > 0) {
         const admin = rows[0];
         
-        // 암호화된 비밀번호 비교
-        const isMatch = await bcrypt.compare(password, admin.pw);
+        // 2. 비밀번호 존재 여부 확인 (DB에 비어있을 경우 방지)
+        if (!admin.pw) {
+          return res.status(401).json({ success: false, message: '비밀번호가 설정되지 않은 계정입니다. 관리자에게 문의하세요.' });
+        }
+
+        // 3. 비밀번호 비교 (bcrypt 해시와 평문 모두 지원)
+        let isMatch = false;
+        try {
+          isMatch = await bcrypt.compare(password, admin.pw);
+        } catch (e) {
+          console.error('Bcrypt compare error:', e);
+        }
+
+        // 평문으로 저장된 비밀번호일 경우를 대비한 하위 호환 로직
+        if (!isMatch && password === admin.pw) {
+          isMatch = true;
+        }
         
         if (isMatch) {
-          // 비밀번호는 제외하고 전송
+          // 4. JWT 토큰 생성
+          const token = jwt.sign(
+            { id: admin.id, adminId: admin.referral_code, name: admin.name, grade: admin.grade },
+            process.env.JWT_SECRET || 'smart_nanum_secret_key_2026',
+            { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
+          );
+
+          // 5. 성공 응답 (비밀번호 제외)
           const { pw, ...adminInfo } = admin;
           res.json({ 
             success: true, 
             message: '로그인 성공!',
+            token: token,
             admin: adminInfo
           });
         } else {
-          res.status(401).json({ success: false, message: '아이디 또는 비밀번호가 틀립니다.' });
+          res.status(401).json({ success: false, message: '아이디 또는 비밀번호가 일치하지 않습니다.' });
         }
       } else {
-        res.status(401).json({ success: false, message: '아이디 또는 비밀번호가 틀립니다.' });
+        res.status(401).json({ success: false, message: '등록되지 않은 관리자 아이디입니다.' });
       }
     } catch (error) {
-      console.error('관리자 로그인 오류:', error);
-      res.status(500).json({ message: '서버 오류가 발생했습니다.' });
+      console.error('관리자 로그인 오류 상세:', error);
+      // 클라이언트에 구체적인 에러를 노출하여 서버에서 발생한 문제를 식별하기 쉽게 함
+      res.status(500).json({ success: false, message: `서버 로그인 처리 중 오류: ${error.message}` });
     }
   },
 
   // 기초코드 목록 조회
   getBasicCodes: async (req, res) => {
     try {
-      const [rows] = await db.execute('SELECT * FROM basiccode ORDER BY base_code, sub_code');
+      const [rows] = await db.execute('SELECT * FROM basicCode ORDER BY base_code, sub_code');
       res.json(rows);
     } catch (error) {
       console.error('기초코드 조회 오류:', error);
@@ -282,7 +315,7 @@ const adminController = {
     const { base_code, sub_code, code_name, note, reg_id } = req.body;
     try {
       await db.execute(
-        'INSERT INTO basiccode (base_code, sub_code, code_name, note, reg_id, upd_id) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO basicCode (base_code, sub_code, code_name, note, reg_id, upd_id) VALUES (?, ?, ?, ?, ?, ?)',
         [base_code, sub_code, code_name, note, reg_id, reg_id]
       );
       res.json({ message: '기초코드가 등록되었습니다.' });
@@ -297,7 +330,7 @@ const adminController = {
     const { base_code, sub_code, code_name, note, upd_id } = req.body;
     try {
       await db.execute(
-        'UPDATE basiccode SET code_name = ?, note = ?, upd_id = ?, upd_date = NOW() WHERE base_code = ? AND sub_code = ?',
+        'UPDATE basicCode SET code_name = ?, note = ?, upd_id = ?, upd_date = NOW() WHERE base_code = ? AND sub_code = ?',
         [code_name, note, upd_id, base_code, sub_code]
       );
       res.json({ message: '기초코드가 수정되었습니다.' });
@@ -311,7 +344,7 @@ const adminController = {
   deleteBasicCode: async (req, res) => {
     const { base_code, sub_code } = req.params;
     try {
-      await db.execute('DELETE FROM basiccode WHERE base_code = ? AND sub_code = ?', [base_code, sub_code]);
+      await db.execute('DELETE FROM basicCode WHERE base_code = ? AND sub_code = ?', [base_code, sub_code]);
       res.json({ message: '기초코드가 삭제되었습니다.' });
     } catch (error) {
       console.error('기초코드 삭제 오류:', error);
@@ -322,7 +355,7 @@ const adminController = {
   // 입금계좌 목록 조회
   getBankInfos: async (req, res) => {
     try {
-      const [rows] = await db.execute('SELECT * FROM bankinfo ORDER BY bank_name');
+      const [rows] = await db.execute('SELECT * FROM bankInfo ORDER BY bank_name');
       res.json(rows);
     } catch (error) {
       console.error('입금계좌 조회 오류:', error);
@@ -335,7 +368,7 @@ const adminController = {
     const { bank_name, account_no, account_holder, referral_code, reg_id } = req.body;
     try {
       // 다음 bank_code 채번 (3자리 숫자로 포맷팅, 예: 001, 002...)
-      const [maxCodeResult] = await db.execute('SELECT MAX(bank_code) as maxCode FROM bankinfo');
+      const [maxCodeResult] = await db.execute('SELECT MAX(bank_code) as maxCode FROM bankInfo');
       let nextCode = '001';
       if (maxCodeResult[0].maxCode) {
         const currentMax = parseInt(maxCodeResult[0].maxCode, 10);
@@ -343,7 +376,7 @@ const adminController = {
       }
 
       await db.execute(
-        'INSERT INTO bankinfo (bank_code, bank_name, account_no, account_holder, referral_code, reg_id, upd_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO bankInfo (bank_code, bank_name, account_no, account_holder, referral_code, reg_id, upd_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [nextCode, bank_name, account_no, account_holder, referral_code || '', reg_id, reg_id]
       );
       res.json({ message: '입금계좌가 등록되었습니다.' });
@@ -358,7 +391,7 @@ const adminController = {
     const { bank_code, bank_name, account_no, account_holder, referral_code, upd_id } = req.body;
     try {
       await db.execute(
-        'UPDATE bankinfo SET bank_name = ?, account_no = ?, account_holder = ?, referral_code = ?, upd_id = ?, upd_date = NOW() WHERE bank_code = ?',
+        'UPDATE bankInfo SET bank_name = ?, account_no = ?, account_holder = ?, referral_code = ?, upd_id = ?, upd_date = NOW() WHERE bank_code = ?',
         [bank_name, account_no, account_holder, referral_code || '', upd_id, bank_code]
       );
       res.json({ message: '입금계좌 정보가 수정되었습니다.' });
@@ -372,7 +405,7 @@ const adminController = {
   deleteBankInfo: async (req, res) => {
     const { bank_code } = req.params;
     try {
-      await db.execute('DELETE FROM bankinfo WHERE bank_code = ?', [bank_code]);
+      await db.execute('DELETE FROM bankInfo WHERE bank_code = ?', [bank_code]);
       res.json({ message: '입금계좌가 삭제되었습니다.' });
     } catch (error) {
       console.error('입금계좌 삭제 오류:', error);
@@ -394,7 +427,7 @@ const adminController = {
   // 마감일 목록 조회
   getEndDates: async (req, res) => {
     try {
-      const [rows] = await db.execute('SELECT * FROM enddate ORDER BY yy DESC');
+      const [rows] = await db.execute('SELECT * FROM endDate ORDER BY yy DESC');
       res.json(rows);
     } catch (error) {
       console.error('마감일 조회 오류:', error);
@@ -408,7 +441,7 @@ const adminController = {
     try {
       // ON DUPLICATE KEY UPDATE를 사용하여 존재하면 업데이트, 없으면 삽입
       await db.execute(
-        'INSERT INTO enddate (yy, end_date, reg_id, upd_id) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE end_date = ?, upd_id = ?, upd_date = NOW()',
+        'INSERT INTO endDate (yy, end_date, reg_id, upd_id) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE end_date = ?, upd_id = ?, upd_date = NOW()',
         [yy, end_date, reg_id, reg_id, end_date, reg_id]
       );
       res.json({ message: `${yy}년도 마감일이 설정되었습니다.` });
@@ -422,7 +455,7 @@ const adminController = {
   deleteEndDate: async (req, res) => {
     const { yy } = req.params;
     try {
-      await db.execute('DELETE FROM enddate WHERE yy = ?', [yy]);
+      await db.execute('DELETE FROM endDate WHERE yy = ?', [yy]);
       res.json({ message: `${yy}년도 마감 설정이 삭제되었습니다.` });
     } catch (error) {
       console.error('마감일 삭제 오류:', error);
@@ -1016,9 +1049,9 @@ const adminController = {
           targetSeqNos.push(currentStatus[0]);
         }
       } else {
-        // seq_no가 없으면 해당 기부자의 당해년도 모든 입금대기(04) 내역 조회
+        // seq_no가 없으면 해당 기부자의 당해년도 모든 신청완료(01) 또는 입금대기(04) 내역 조회
         const [pendingList] = await connection.execute(
-          'SELECT seq_no, step_code, dona_amt, real_amt FROM donation_detail WHERE cust_no = ? AND dona_yy = ? AND step_code = "04"',
+          'SELECT seq_no, step_code, dona_amt, real_amt FROM donation_detail WHERE cust_no = ? AND dona_yy = ? AND step_code IN ("01", "04")',
           [cust_no, dona_yy]
         );
         targetSeqNos = pendingList;
@@ -1026,12 +1059,13 @@ const adminController = {
 
       if (targetSeqNos.length === 0) {
         await connection.rollback();
-        return res.status(403).json({ message: '처리 가능한 내역이 없습니다.' });
+        // 이미 완료된 건일 수 있으므로 성공으로 응답하거나 상세 메시지 전달
+        return res.status(200).json({ success: true, message: '이미 처리되었거나 처리 가능한 내역이 없습니다.' });
       }
 
       // 1. 입금 완료 처리 로직 (step_code '02'인 경우)
       if (step_code === '02') {
-        // (0) 현재 pre_deposit의 최대 seq_no 가져오기 (루프 밖에서 한 번만 조회)
+        // (0) 현재 pre_deposit의 최대 seq_no 가져오기
         const [preSeqResult] = await connection.execute(
           'SELECT IFNULL(MAX(seq_no), 0) as max_seq FROM pre_deposit WHERE cust_no = ? AND dona_yy = ?',
           [cust_no, dona_yy]
@@ -1045,7 +1079,7 @@ const adminController = {
             [upd_id || 'admin', cust_no, dona_yy, target.seq_no]
           );
 
-          // (2) pre_deposit 테이블 저장 (nextPreSeq 사용)
+          // (2) pre_deposit 테이블 저장
           await connection.execute(
             `INSERT INTO pre_deposit (
               dona_yy, cust_no, seq_no, deposit_type, deposit_amt, deposit_date, 
@@ -1059,13 +1093,13 @@ const adminController = {
           );
         }
 
-        // (3) 마스터 테이블 업데이트 시간 갱신
+        // (3) 마스터 테이블 업데이트 시간만 갱신 (입금 확인 시에는 마스터 상세 정보를 수정하지 않음)
         await connection.execute(
           'UPDATE donation_master SET upd_date = NOW() WHERE cust_no = ? AND dona_yy = ?',
           [cust_no, dona_yy]
         );
       } else {
-        // 일반 수정 (seq_no가 있을 때만 가능)
+        // 일반 수정 (seq_no가 있을 때만 상세 정보 및 마스터 정보 전체 수정)
         if (!seq_no) {
           await connection.rollback();
           return res.status(400).json({ message: '상세 수정을 위해서는 seq_no가 필요합니다.' });
@@ -1083,32 +1117,32 @@ const adminController = {
             signature, upd_id, cust_no, dona_yy, seq_no
           ]
         );
-      }
 
-      // 2. 마스터 정보 수정
-      await connection.execute(
-        `UPDATE donation_master SET 
-          name = ?, hpno = ?, jmin1 = ?, jmin2 = ?, zipcode = ?, address = ?, address_detail = ?,
-          upd_id = ?, upd_date = NOW()
-        WHERE cust_no = ? AND dona_yy = ?`,
-        [name, hpno, jmin1, jmin2, zipcode, address, address_detail, upd_id, cust_no, dona_yy]
-      );
+        // 마스터 정보 수정 (일반 수정일 때만 실행)
+        await connection.execute(
+          `UPDATE donation_master SET 
+            name = ?, hpno = ?, jmin1 = ?, jmin2 = ?, zipcode = ?, address = ?, address_detail = ?,
+            upd_id = ?, upd_date = NOW()
+          WHERE cust_no = ? AND dona_yy = ?`,
+          [name || finalName, hpno, jmin1, jmin2, zipcode, address, address_detail, upd_id, cust_no, dona_yy]
+        );
+      }
 
       // 3. 합계 갱신
       await connection.execute(
         `UPDATE donation_master m
-         SET total_dona_amt = (SELECT SUM(dona_amt) FROM donation_detail WHERE cust_no = m.cust_no AND dona_yy = m.dona_yy),
-             total_real_amt = (SELECT SUM(deposit_amt) FROM donation_detail WHERE cust_no = m.cust_no AND dona_yy = m.dona_yy)
+         SET total_dona_amt = (SELECT IFNULL(SUM(dona_amt), 0) FROM donation_detail WHERE cust_no = m.cust_no AND dona_yy = m.dona_yy),
+             total_real_amt = (SELECT IFNULL(SUM(deposit_amt), 0) FROM donation_detail WHERE cust_no = m.cust_no AND dona_yy = m.dona_yy)
          WHERE cust_no = ? AND dona_yy = ?`,
         [cust_no, dona_yy]
       );
 
       await connection.commit();
-      res.json({ success: true, message: '수정되었습니다.' });
+      res.json({ success: true, message: '처리되었습니다.' });
     } catch (error) {
       await connection.rollback();
-      console.error('기부 수정 오류:', error);
-      res.status(500).json({ message: '수정 중 오류가 발생했습니다.' });
+      console.error('기부 수정/입금처리 오류 상세:', error);
+      res.status(500).json({ message: '처리 중 오류가 발생했습니다: ' + error.message });
     } finally {
       connection.release();
     }
@@ -2185,8 +2219,33 @@ const adminController = {
       console.error('추천인 목록 조회 오류:', error);
       res.status(500).json({ message: '조회 중 오류가 발생했습니다.' });
     }
-  }
+  },
 
+  // 기부 신청 년도 목록 조회
+  getDonationYears: async (req, res) => {
+    try {
+      // endDate 테이블에서 관리 중인 년도 목록을 가져옵니다.
+      const [rows] = await db.execute('SELECT DISTINCT yy FROM endDate ORDER BY yy DESC');
+      
+      let years = [];
+      if (rows.length > 0) {
+        years = rows.map(r => String(r.yy));
+      } else {
+        // enddate에 데이터가 없다면 donation_master에서 실제 기부 내역이 있는 연도를 가져옵니다.
+        const [donRows] = await db.execute('SELECT DISTINCT dona_yy as yy FROM donation_master ORDER BY dona_yy DESC');
+        if (donRows.length > 0) {
+          years = donRows.map(r => String(r.yy));
+        } else {
+          // 모든 테이블에 데이터가 없다면 현재 연도를 기본값으로 반환합니다.
+          years = [new Date().getFullYear().toString()];
+        }
+      }
+      res.json(years);
+    } catch (error) {
+      console.error('년도 목록 조회 오류:', error);
+      res.status(500).json({ message: '조회 중 오류가 발생했습니다.' });
+    }
+  }
 };
 
 module.exports = adminController;

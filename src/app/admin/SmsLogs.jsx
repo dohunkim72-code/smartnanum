@@ -12,11 +12,14 @@ const SmsLogs = () => {
   const fetchLogs = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/admin/sms-logs');
+      const response = await fetch('/api/admin/sms-logs', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       const data = await response.json();
-      setLogs(data);
+      setLogs(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Logs fetch error:', error);
+      setLogs([]);
     } finally {
       setIsLoading(false);
     }
@@ -37,11 +40,14 @@ const SmsLogs = () => {
     }
   };
 
-  const filteredLogs = logs.filter(log => 
-    log.receiver_phone?.includes(searchTerm) || 
-    log.cust_name?.includes(searchTerm) ||
-    log.msg_content?.includes(searchTerm)
-  );
+  const filteredLogs = (Array.isArray(logs) ? logs : []).filter(log => {
+    const phone = log.receiver_phone || '';
+    const name = log.cust_name || '';
+    const content = log.msg_content || '';
+    return phone.includes(searchTerm) || 
+           name.includes(searchTerm) ||
+           content.includes(searchTerm);
+  });
 
   return (
     <div className="space-y-6">
@@ -93,7 +99,7 @@ const SmsLogs = () => {
                 <tr>
                   <td colSpan="5" className="px-6 py-12 text-center text-slate-400">데이터를 불러오는 중입니다...</td>
                 </tr>
-              ) : filteredLogs.length === 0 ? (
+              ) : (Array.isArray(filteredLogs) && filteredLogs.length === 0) ? (
                 <tr>
                   <td colSpan="5" className="px-6 py-12 text-center text-slate-400">조회된 이력이 없습니다.</td>
                 </tr>
@@ -101,15 +107,15 @@ const SmsLogs = () => {
                 filteredLogs.map((log) => (
                   <tr key={log.log_id} className="hover:bg-slate-50/50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600">
-                      {new Date(log.reg_date).toLocaleString()}
+                      {log.reg_date ? new Date(log.reg_date).toLocaleString() : '-'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-bold text-slate-900">{log.cust_name || '비회원'}</div>
-                      <div className="text-xs text-slate-500">{log.receiver_phone}</div>
+                      <div className="text-sm font-bold text-slate-900">{log?.cust_name || '비회원'}</div>
+                      <div className="text-xs text-slate-500">{log?.receiver_phone || '-'}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="text-xs font-medium px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md">
-                        {log.send_category || '일반'}
+                        {log?.send_category || '일반'}
                       </span>
                     </td>
                     <td className="px-6 py-4 max-w-xs truncate text-sm text-slate-600">

@@ -38,11 +38,16 @@ const AdminProduct = () => {
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/admin/products');
+      const response = await fetch('/api/admin/products', {
+        headers: { 
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
       const data = await response.json();
-      setProducts(data);
+      setProducts(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('상품 목록 조회 오류:', error);
+      setProducts([]);
       setStatusModal({
         show: true,
         type: 'error',
@@ -58,11 +63,14 @@ const AdminProduct = () => {
   }, []);
 
   // 검색 필터링
-  const filteredProducts = products.filter(p => 
-    p.product_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.product_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.brand && p.brand.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredProducts = (Array.isArray(products) ? products : []).filter(p => {
+    const name = p.product_name || '';
+    const code = p.product_code || '';
+    const brand = p.brand || '';
+    return name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+           brand.toLowerCase().includes(searchTerm.toLowerCase());
+  });
 
   // 모달 열기 (등록/수정)
   const openModal = (product = null) => {
@@ -97,7 +105,10 @@ const AdminProduct = () => {
       const method = isNew ? 'POST' : 'PUT';
       const response = await fetch('/api/admin/products', {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({
           ...currentProduct,
           reg_id: adminId,
@@ -141,7 +152,8 @@ const AdminProduct = () => {
       onConfirm: async () => {
         try {
           const response = await fetch(`/api/admin/products/${code}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
           });
 
           if (response.ok) {
@@ -223,7 +235,7 @@ const AdminProduct = () => {
               </div>
               <span className="font-bold">총 상품 수</span>
             </div>
-            <span className="text-2xl font-black">{products.length}</span>
+            <span className="text-2xl font-black">{Array.isArray(products) ? products.length : 0}</span>
           </div>
         </div>
 
@@ -254,8 +266,8 @@ const AdminProduct = () => {
                   filteredProducts.map((product) => (
                     <tr key={product.product_code} className="hover:bg-slate-50/50 transition-colors group">
                       <td className="px-6 py-4">
-                        <div className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{product.product_name}</div>
-                        <div className="text-xs text-slate-400 font-mono mt-1">{product.product_code}</div>
+                        <div className="font-bold text-slate-800 group-hover:text-blue-600 transition-colors">{product?.product_name || '이름 없음'}</div>
+                        <div className="text-xs text-slate-400 font-mono mt-1">{product?.product_code || '-'}</div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="text-sm text-slate-600 flex items-center gap-1.5 font-medium">
@@ -351,7 +363,7 @@ const AdminProduct = () => {
                         <input
                           disabled
                           className="w-full pl-14 pr-6 py-4 rounded-2xl bg-white border border-slate-100 text-blue-600 font-black outline-none shadow-sm cursor-not-allowed"
-                          value={isNew ? '자동 생성 (SYSTEM)' : currentProduct.product_code}
+                          value={isNew ? '자동 생성 (SYSTEM)' : (currentProduct?.product_code || '')}
                         />
                       </div>
                     </div>
@@ -363,7 +375,7 @@ const AdminProduct = () => {
                         </div>
                         <input
                           className="w-full pl-14 pr-6 py-4 rounded-2xl bg-white border border-slate-100 focus:border-blue-500 outline-none transition-all font-bold"
-                          value={currentProduct.product_category}
+                          value={currentProduct?.product_category || ''}
                           onChange={(e) => setCurrentProduct({...currentProduct, product_category: e.target.value})}
                           placeholder="분류 입력"
                         />
@@ -376,7 +388,7 @@ const AdminProduct = () => {
                     <input
                       required
                       className="w-full px-6 py-5 rounded-2xl bg-white border border-slate-100 focus:border-blue-500 outline-none transition-all font-black text-lg text-slate-800 placeholder:text-slate-300 shadow-sm"
-                      value={currentProduct.product_name}
+                      value={currentProduct?.product_name || ''}
                       onChange={(e) => setCurrentProduct({...currentProduct, product_name: e.target.value})}
                       placeholder="상품명을 정확하게 입력하세요"
                     />
@@ -387,7 +399,7 @@ const AdminProduct = () => {
                       <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-2">Brand</label>
                       <input
                         className="w-full px-6 py-4 rounded-2xl bg-white border border-slate-100 focus:border-blue-500 outline-none transition-all font-bold shadow-sm"
-                        value={currentProduct.brand}
+                        value={currentProduct?.brand || ''}
                         onChange={(e) => setCurrentProduct({...currentProduct, brand: e.target.value})}
                         placeholder="브랜드명"
                       />
@@ -396,7 +408,7 @@ const AdminProduct = () => {
                       <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-2">Unit (EA/KG/..)</label>
                       <input
                         className="w-full px-6 py-4 rounded-2xl bg-white border border-slate-100 focus:border-blue-500 outline-none transition-all font-black text-blue-600 text-center uppercase shadow-sm"
-                        value={currentProduct.unit}
+                        value={currentProduct?.unit || ''}
                         onChange={(e) => setCurrentProduct({...currentProduct, unit: e.target.value})}
                         placeholder="EA"
                       />
@@ -411,7 +423,7 @@ const AdminProduct = () => {
                       <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-2">Specification</label>
                       <input
                         className="w-full px-6 py-4 rounded-2xl bg-white border border-slate-100 focus:border-blue-500 outline-none transition-all font-bold shadow-sm"
-                        value={currentProduct.product_spec}
+                        value={currentProduct?.product_spec || ''}
                         onChange={(e) => setCurrentProduct({...currentProduct, product_spec: e.target.value})}
                         placeholder="상품 규격/사양"
                       />
@@ -422,7 +434,7 @@ const AdminProduct = () => {
                         <input
                           type="text"
                           className="w-full px-6 py-4 rounded-2xl bg-white border border-slate-100 focus:border-blue-500 outline-none transition-all text-right font-bold text-slate-700 shadow-sm"
-                          value={formatPrice(currentProduct.cost_price)}
+                          value={formatPrice(currentProduct?.cost_price)}
                           onChange={(e) => setCurrentProduct({...currentProduct, cost_price: unformatPrice(e.target.value)})}
                         />
                         <span className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 font-black">₩</span>
@@ -436,7 +448,7 @@ const AdminProduct = () => {
                       <input
                         type="text"
                         className="w-full px-6 py-6 rounded-2xl bg-white/10 border border-white/20 focus:bg-white/20 outline-none transition-all text-right font-black text-2xl text-white placeholder:text-white/30"
-                        value={formatPrice(currentProduct.sale_price)}
+                        value={formatPrice(currentProduct?.sale_price)}
                         onChange={(e) => setCurrentProduct({...currentProduct, sale_price: unformatPrice(e.target.value)})}
                         placeholder="0"
                       />

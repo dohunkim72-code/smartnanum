@@ -25,9 +25,11 @@ const AdminStock = () => {
   const fetchStocks = async () => {
     try {
       setLoading(true);
-      const response = await fetch('/api/admin/stock-status');
+      const response = await fetch('/api/admin/stock-status', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       const data = await response.json();
-      setStocks(data);
+      setStocks(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('재고 현황 조회 오류:', error);
     } finally {
@@ -40,14 +42,16 @@ const AdminStock = () => {
   }, []);
 
   // 검색 필터링
-  const filteredStocks = stocks.filter(s => 
-    s.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.client_name?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredStocks = (Array.isArray(stocks) ? stocks : []).filter(s => {
+    const pName = (s?.product_name || '').toLowerCase();
+    const cName = (s?.client_name || '').toLowerCase();
+    const term = (searchTerm || '').toLowerCase();
+    return pName.includes(term) || cName.includes(term);
+  });
 
-  // 통계 요약 계산
-  const totalStockItems = stocks.reduce((acc, curr) => acc + curr.current_stock, 0);
-  const lowStockItems = stocks.filter(s => s.current_stock < 10).length;
+  // 통계 요약 계산 (배열인 경우에만 계산)
+  const totalStockItems = (Array.isArray(stocks) ? stocks : []).reduce((acc, curr) => acc + (Number(curr?.current_stock) || 0), 0);
+  const lowStockItems = (Array.isArray(stocks) ? stocks : []).filter(s => (Number(s?.current_stock) || 0) < 10).length;
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -98,7 +102,7 @@ const AdminStock = () => {
             </div>
             <div>
               <p className="text-sm font-medium text-gray-500">활성 보관 기부처</p>
-              <h3 className="text-2xl font-bold text-gray-800">{new Set(stocks.map(s => s.client_no)).size} <span className="text-sm font-normal text-gray-400 ml-1">Clients</span></h3>
+              <h3 className="text-2xl font-bold text-gray-800">{new Set((stocks || []).map(s => s.client_no)).size} <span className="text-sm font-normal text-gray-400 ml-1">Clients</span></h3>
             </div>
           </div>
         </div>
@@ -160,8 +164,8 @@ const AdminStock = () => {
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <div className={`text-lg font-black ${s.current_stock < 10 ? 'text-red-600' : 'text-gray-800'}`}>
-                          {s.current_stock?.toLocaleString()}
+                        <div className={`text-lg font-black ${(s.current_stock || 0) < 10 ? 'text-red-600' : 'text-gray-800'}`}>
+                          {(s.current_stock || 0).toLocaleString()}
                         </div>
                         <div className="text-xs text-gray-400 mt-0.5">{s.unit || 'EA'}</div>
                       </td>

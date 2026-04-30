@@ -46,16 +46,21 @@ const AdminBaseCode = () => {
   const fetchCodes = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/admin/basic-codes');
+      const response = await fetch('/api/admin/basic-codes', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       const data = await response.json();
-      setCodes(data);
-      setFilteredCodes(data);
+      const validData = Array.isArray(data) ? data : [];
+      setCodes(validData);
+      setFilteredCodes(validData);
       
       // 고유 대분류 코드 추출 (필터용)
-      const baseCodes = [...new Set(data.map(item => item.base_code))];
+      const baseCodes = [...new Set(validData.map(item => item?.base_code).filter(Boolean))];
       setUniqueBaseCodes(baseCodes);
     } catch (error) {
       console.error('코드 조회 중 오류:', error);
+      setCodes([]);
+      setFilteredCodes([]);
     } finally {
       setIsLoading(false);
     }
@@ -75,9 +80,9 @@ const AdminBaseCode = () => {
     
     if (searchTerm) {
       result = result.filter(c => 
-        c.code_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.sub_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.base_code.toLowerCase().includes(searchTerm.toLowerCase())
+        (c.code_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (c.sub_code || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (c.base_code || '').toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
     
@@ -93,7 +98,10 @@ const AdminBaseCode = () => {
       const method = isNew ? 'POST' : 'PUT';
       const response = await fetch('/api/admin/basic-codes', {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({
           ...currentCode,
           reg_id: adminInfo.referral_code,
@@ -136,7 +144,8 @@ const AdminBaseCode = () => {
       onConfirm: async () => {
         try {
           const response = await fetch(`/api/admin/basic-codes/${base_code}/${sub_code}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
           });
           if (response.ok) {
             setStatusModal({

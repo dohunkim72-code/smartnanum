@@ -60,12 +60,17 @@ const AdminClient = () => {
   const fetchClients = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/admin/clients');
+      const response = await fetch('/api/admin/clients', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       const data = await response.json();
-      setClients(data);
-      setFilteredClients(data);
+      const validData = Array.isArray(data) ? data : [];
+      setClients(validData);
+      setFilteredClients(validData);
     } catch (error) {
       console.error('기부처 조회 오류:', error);
+      setClients([]);
+      setFilteredClients([]);
     } finally {
       setIsLoading(false);
     }
@@ -77,8 +82,9 @@ const AdminClient = () => {
 
   // 검색 필터링
   useEffect(() => {
-    const filtered = clients.filter(client => 
-      client.client_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const safeClients = Array.isArray(clients) ? clients : [];
+    const filtered = safeClients.filter(client => 
+      (client.client_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
       (client.biz_no && client.biz_no.includes(searchTerm)) ||
       (client.manager_name && client.manager_name.includes(searchTerm))
     );
@@ -95,7 +101,10 @@ const AdminClient = () => {
       const method = isNew ? 'POST' : 'PUT';
       const response = await fetch('/api/admin/clients', {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({
           ...currentClient,
           reg_id: adminId,
@@ -138,7 +147,8 @@ const AdminClient = () => {
       onConfirm: async () => {
         try {
           const response = await fetch(`/api/admin/clients/${client_no}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
           });
           if (response.ok) {
             setStatusModal({

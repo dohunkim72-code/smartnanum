@@ -71,10 +71,13 @@ const AdminReceipt = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      const token = localStorage.getItem('token');
+      const headers = { 'Authorization': `Bearer ${token}` };
+      
       const [resR, resP, resC] = await Promise.all([
-        fetch('/api/admin/receipts'),
-        fetch('/api/admin/products'),
-        fetch('/api/admin/clients')
+        fetch('/api/admin/receipts', { headers }),
+        fetch('/api/admin/products', { headers }),
+        fetch('/api/admin/clients', { headers })
       ]);
       
       const [dataR, dataP, dataC] = await Promise.all([
@@ -83,11 +86,14 @@ const AdminReceipt = () => {
         resC.json()
       ]);
       
-      setReceipts(dataR);
-      setProducts(dataP.filter(p => p.use_yn === 'Y'));
-      setClients(dataC);
+      setReceipts(Array.isArray(dataR) ? dataR : []);
+      setProducts(Array.isArray(dataP) ? dataP.filter(p => p.use_yn === 'Y') : []);
+      setClients(Array.isArray(dataC) ? dataC : []);
     } catch (error) {
       console.error('데이터 로드 오류:', error);
+      setReceipts([]);
+      setProducts([]);
+      setClients([]);
     } finally {
       setLoading(false);
     }
@@ -98,13 +104,15 @@ const AdminReceipt = () => {
   }, []);
 
   // 검색 및 년월 필터링
-  const filteredReceipts = receipts.filter(r => {
+  const filteredReceipts = (Array.isArray(receipts) ? receipts : []).filter(r => {
+    const pName = r.product_name || '';
+    const cName = r.client_name || '';
     const matchesSearch = 
-      r.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      r.client_name?.toLowerCase().includes(searchTerm.toLowerCase());
+      pName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      cName.toLowerCase().includes(searchTerm.toLowerCase());
     
     // r.receipt_date는 "YYYY-MM-DD" 형식이므로 "YYYY-MM"으로 시작하는지 체크
-    const matchesMonth = !selectedMonth || r.receipt_date?.startsWith(selectedMonth);
+    const matchesMonth = !selectedMonth || (r.receipt_date && r.receipt_date.startsWith(selectedMonth));
     
     return matchesSearch && matchesMonth;
   });
@@ -127,7 +135,10 @@ const AdminReceipt = () => {
     try {
       const response = await fetch('/api/admin/receipts', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({
           ...formData,
           reg_id: adminId
@@ -173,7 +184,8 @@ const AdminReceipt = () => {
       onConfirm: async () => {
         try {
           const response = await fetch(`/api/admin/receipts/${r.receipt_yymm}/${r.client_no}/${r.product_code}/${r.seq_no}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
           });
 
           if (response.ok) {
@@ -271,7 +283,7 @@ const AdminReceipt = () => {
           <div className="h-6 w-[1px] bg-gray-200 mx-2 hidden md:block"></div>
           <div className="text-sm text-gray-500 hidden md:flex items-center gap-2">
             <Filter size={16} />
-            총 {filteredReceipts.length}건
+            총 {Array.isArray(filteredReceipts) ? filteredReceipts.length : 0}건
           </div>
         </div>
 
@@ -294,12 +306,12 @@ const AdminReceipt = () => {
                   <tr>
                     <td colSpan="6" className="px-6 py-10 text-center text-gray-400">데이터를 불러오는 중입니다...</td>
                   </tr>
-                ) : filteredReceipts.length === 0 ? (
+                ) : (Array.isArray(filteredReceipts) && filteredReceipts.length === 0) ? (
                   <tr>
                     <td colSpan="6" className="px-6 py-10 text-center text-gray-400">입고 내역이 없습니다.</td>
                   </tr>
                 ) : (
-                  filteredReceipts.map((r, idx) => (
+                  (Array.isArray(filteredReceipts) ? filteredReceipts : []).map((r, idx) => (
                     <tr key={`${r.receipt_yymm}-${r.client_no}-${r.product_code}-${r.seq_no}`} className="hover:bg-gray-50/50 transition-colors">
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
@@ -404,7 +416,7 @@ const AdminReceipt = () => {
                           onChange={(e) => setFormData({...formData, client_no: e.target.value})}
                         >
                           <option value="">기부처 선택</option>
-                          {clients.map(c => (
+                          {Array.isArray(clients) && clients.map(c => (
                             <option key={c.client_no} value={c.client_no}>{c.client_name}</option>
                           ))}
                         </select>
@@ -432,7 +444,7 @@ const AdminReceipt = () => {
                         }}
                       >
                         <option value="">입고할 상품을 선택하세요</option>
-                        {products.map(p => (
+                        {Array.isArray(products) && products.map(p => (
                           <option key={p.product_code} value={p.product_code}>{p.product_name} ({p.product_spec})</option>
                         ))}
                       </select>

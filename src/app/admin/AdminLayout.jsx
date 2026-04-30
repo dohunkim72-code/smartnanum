@@ -219,20 +219,28 @@ const AdminLayout = ({ children }) => {
               to="/admin/profile"
               className="flex items-center gap-4 pl-8 border-l border-slate-100 hover:opacity-80 transition-all group"
             >
-              <div className="text-right hidden sm:block">
-                <p className="text-[14px] font-black text-slate-900 group-hover:text-blue-600 transition-colors">
-                  {JSON.parse(localStorage.getItem('adminInfo') || '{}').name || '관리자'}
-                </p>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter mt-0.5">
-                  {JSON.parse(localStorage.getItem('adminInfo') || '{}').grade === '01' ? 'Super Administrator' : 'Staff Admin'}
-                </p>
-              </div>
-              <div className="relative">
-                <div className="w-12 h-12 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-[1.25rem] flex items-center justify-center text-white font-black shadow-lg shadow-blue-500/20 group-hover:shadow-blue-500/40 transition-all text-lg">
-                  {(JSON.parse(localStorage.getItem('adminInfo') || '{}').name || 'K').charAt(0)}
-                </div>
-                <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full shadow-sm" />
-              </div>
+              {(() => {
+                const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+                const adminName = adminInfo.name || '관리자';
+                return (
+                  <>
+                    <div className="text-right hidden sm:block">
+                      <p className="text-[14px] font-black text-slate-900 group-hover:text-blue-600 transition-colors">
+                        {adminName}
+                      </p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tighter mt-0.5">
+                        {adminInfo.grade === '01' ? 'Super Administrator' : 'Staff Admin'}
+                      </p>
+                    </div>
+                    <div className="relative">
+                      <div className="w-12 h-12 bg-gradient-to-tr from-blue-500 to-indigo-600 rounded-[1.25rem] flex items-center justify-center text-white font-black shadow-lg shadow-blue-500/20 group-hover:shadow-blue-500/40 transition-all text-lg">
+                        {adminName.charAt(0)}
+                      </div>
+                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 border-2 border-white rounded-full shadow-sm" />
+                    </div>
+                  </>
+                );
+              })()}
             </Link>
           </div>
         </header>

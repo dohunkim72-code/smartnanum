@@ -44,9 +44,11 @@ const AdminBankInfo = () => {
   const fetchBankInfos = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/admin/bank-info');
+      const response = await fetch('/api/admin/bank-info', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       const data = await response.json();
-      setBankInfos(data);
+      setBankInfos(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('계좌 조회 중 오류:', error);
     } finally {
@@ -57,9 +59,11 @@ const AdminBankInfo = () => {
   // 추천인 목록 불러오기
   const fetchReferrals = async () => {
     try {
-      const response = await fetch('/api/admin/referrals');
+      const response = await fetch('/api/admin/referrals', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       const data = await response.json();
-      setReferrals(data);
+      setReferrals(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('추천인 조회 오류:', error);
     }
@@ -79,7 +83,10 @@ const AdminBankInfo = () => {
       const method = isNew ? 'POST' : 'PUT';
       const response = await fetch('/api/admin/bank-info', {
         method,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({
           ...currentBank,
           reg_id: adminInfo.referral_code,
@@ -122,7 +129,8 @@ const AdminBankInfo = () => {
       onConfirm: async () => {
         try {
           const response = await fetch(`/api/admin/bank-info/${bank_code}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
           });
           if (response.ok) {
             setStatusModal({
@@ -354,9 +362,9 @@ const AdminBankInfo = () => {
                     className="w-full px-4 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none transition-all font-bold appearance-none cursor-pointer"
                   >
                     <option value="">공용 계좌 (추천인 없음)</option>
-                    {referrals.map((ref) => (
-                      <option key={ref.referral_code} value={ref.referral_code}>
-                        {ref.name} ({ref.referral_code})
+                    {Array.isArray(referrals) && referrals.map((ref) => (
+                      <option key={ref?.referral_code || Math.random()} value={ref?.referral_code || ''}>
+                        {ref?.name || 'Unknown'} ({ref?.referral_code || '-'})
                       </option>
                     ))}
                   </select>

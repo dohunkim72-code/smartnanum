@@ -36,11 +36,18 @@ const AdminEndDate = () => {
   const fetchEndDates = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/admin/closing-dates');
+      const response = await fetch('/api/admin/closing-dates', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (!response.ok) {
+        throw new Error('데이터 조회 실패');
+      }
       const data = await response.json();
-      setEndDates(data);
+      // 데이터가 배열인지 확인 후 설정
+      setEndDates(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('마감일 조회 오류:', error);
+      setEndDates([]); // 오류 발생 시 빈 배열로 설정하여 map 오류 방지
     } finally {
       setIsLoading(false);
     }
@@ -58,7 +65,10 @@ const AdminEndDate = () => {
     try {
       const response = await fetch('/api/admin/closing-dates', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({
           ...formData,
           reg_id: adminInfo.referral_code || 'admin'
@@ -100,7 +110,8 @@ const AdminEndDate = () => {
       onConfirm: async () => {
         try {
           const response = await fetch(`/api/admin/closing-dates/${yy}`, {
-            method: 'DELETE'
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
           });
           if (response.ok) {
             setStatusModal({
@@ -209,9 +220,9 @@ const AdminEndDate = () => {
                     </td>
                     <td className="px-8 py-6">
                       <div className="text-xs space-y-1">
-                        <p className="font-bold text-slate-500">ID: {item.upd_id || item.reg_id}</p>
+                        <p className="font-bold text-slate-500">ID: {item.upd_id || item.reg_id || 'system'}</p>
                         <p className="text-slate-400 font-medium">
-                          {new Date(item.upd_date || item.reg_date).toLocaleDateString()} 수정
+                          {item.upd_date || item.reg_date ? new Date(item.upd_date || item.reg_date).toLocaleDateString() : '-'} 수정
                         </p>
                       </div>
                     </td>

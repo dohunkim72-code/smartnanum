@@ -46,10 +46,10 @@ const AdminContractDoc = () => {
   const fetchInitData = async () => {
     try {
       const [yearRes, refRes] = await Promise.all([
-        fetch('https://hanwoolfd.synology.me/api/admin/donation/years', {
+        fetch('/api/admin/donation/years', {
           headers: { Authorization: `Bearer ${token}` }
         }),
-        fetch('https://hanwoolfd.synology.me/api/admin/referrals', {
+        fetch('/api/admin/referrals', {
           headers: { Authorization: `Bearer ${token}` }
         })
       ]);
@@ -57,8 +57,8 @@ const AdminContractDoc = () => {
       const yearsData = await yearRes.json();
       const referralsData = await refRes.json();
       
-      setYears(yearsData || [dayjs().format('YYYY')]);
-      setReferrals(referralsData || []);
+      setYears(Array.isArray(yearsData) ? yearsData : [dayjs().format('YYYY')]);
+      setReferrals(Array.isArray(referralsData) ? referralsData : []);
     } catch (err) {
       console.error('초기 데이터 로딩 오류:', err);
     }
@@ -77,7 +77,7 @@ const AdminContractDoc = () => {
         body: JSON.stringify(cond)
       });
       const data = await res.json();
-      setList(data || []);
+      setList(Array.isArray(data) ? data : []);
       setChecked({});
       setSelectAll(false);
     } catch (err) {
@@ -226,7 +226,7 @@ const AdminContractDoc = () => {
               className="w-full bg-slate-50 border-none rounded-2xl px-5 py-4 font-bold text-slate-700 focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
             >
               <option value="">전체 추천인</option>
-              {referrals.map(r => (
+              {(referrals || []).map(r => (
                 <option key={r.referral_code} value={r.referral_code}>{r.name}</option>
               ))}
             </select>
@@ -274,7 +274,7 @@ const AdminContractDoc = () => {
                     <p className="text-slate-400 font-bold">데이터를 불러오는 중입니다...</p>
                   </td>
                 </tr>
-              ) : list.length === 0 ? (
+              ) : (list || []).length === 0 ? (
                 <tr>
                   <td colSpan="7" className="py-32 text-center">
                     <AlertCircle className="mx-auto text-slate-200 mb-4" size={60} />
@@ -282,7 +282,7 @@ const AdminContractDoc = () => {
                   </td>
                 </tr>
               ) : (
-                list.map((row) => (
+                (list || []).map((row) => (
                   <tr 
                     key={row.cust_no} 
                     className="group hover:bg-blue-50/30 transition-colors cursor-pointer"
@@ -299,7 +299,7 @@ const AdminContractDoc = () => {
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-slate-100 rounded-xl flex items-center justify-center text-slate-500 font-black group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
-                          {row.name.charAt(0)}
+                          {row.name?.charAt(0) || '명'}
                         </div>
                         <div>
                           <p className="font-bold text-slate-900">{row.name}</p>
@@ -314,12 +314,12 @@ const AdminContractDoc = () => {
                     </td>
                     <td className="px-6 py-5 text-right">
                       <p className="font-black text-slate-900 group-hover:text-blue-600 transition-colors">
-                        {Number(row.display_dona_amt).toLocaleString()}원
+                        {Number(row.display_dona_amt || 0).toLocaleString()}원
                       </p>
                     </td>
                     <td className="px-6 py-5 text-right">
                       <p className="font-black text-blue-600">
-                        {Number(row.real_amt).toLocaleString()}원
+                        {Number(row.real_amt || 0).toLocaleString()}원
                       </p>
                     </td>
                     <td className="px-6 py-5 text-center">

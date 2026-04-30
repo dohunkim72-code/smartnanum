@@ -32,9 +32,12 @@ const AdminDeposit = () => {
       const response = await fetch('/api/admin/donation/years', {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
+      if (!response.ok) throw new Error('Years fetch failed');
       const data = await response.json();
-      if (data && data.length > 0) {
+      if (Array.isArray(data) && data.length > 0) {
         setYears(data);
+        // 만약 데이터가 여러 개라면 'all'을 선택할 수 있도록 할 수 있지만, 
+        // 사용자 편의를 위해 항상 올해를 기본값으로 유지하고 목록에는 가져온 데이터를 넣습니다.
       } else {
         setYears([new Date().getFullYear().toString()]);
       }
@@ -51,10 +54,12 @@ const AdminDeposit = () => {
       const response = await fetch('/api/admin/donations', {
         headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
       });
+      if (!response.ok) throw new Error('Deposits fetch failed');
       const data = await response.json();
-      setDeposits(data || []);
+      setDeposits(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Fetch deposits error:', error);
+      setDeposits([]);
       showStatus('error', '데이터를 불러오는 중 오류가 발생했습니다.');
     } finally {
       setIsLoading(false);
@@ -152,7 +157,7 @@ const AdminDeposit = () => {
             <Clock size={24} />
           </div>
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">입금 대기 ({selectedYear === 'all' ? '전체' : selectedYear + '년'})</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">입금 대기 ({selectedYear === 'all' ? '전체' : `${selectedYear}년`})</p>
             <h3 className="text-2xl font-black text-slate-900">
               {deposits.filter(d => d.deposit_yn !== 'Y' && (selectedYear === 'all' || String(d.dona_yy) === selectedYear)).length} <span className="text-sm font-medium text-slate-400">건</span>
             </h3>
@@ -163,7 +168,7 @@ const AdminDeposit = () => {
             <CheckCircle2 size={24} />
           </div>
           <div>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">입금 완료 ({selectedYear === 'all' ? '전체' : selectedYear + '년'})</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">입금 완료 ({selectedYear === 'all' ? '전체' : `${selectedYear}년`})</p>
             <h3 className="text-2xl font-black text-slate-900">
               {deposits.filter(d => d.deposit_yn === 'Y' && (selectedYear === 'all' || String(d.dona_yy) === selectedYear)).length} <span className="text-sm font-medium text-slate-400">건</span>
             </h3>
@@ -174,7 +179,7 @@ const AdminDeposit = () => {
             <Wallet size={24} />
           </div>
           <div>
-            <p className="text-xs font-bold text-blue-400 uppercase tracking-tighter">총 미입금 금액</p>
+            <p className="text-xs font-bold text-blue-400 uppercase tracking-tighter">총 미입금 금액 ({selectedYear === 'all' ? '전체' : `${selectedYear}년`})</p>
             <h3 className="text-2xl font-black text-slate-900">
               ₩{deposits
                 .filter(d => d.deposit_yn !== 'Y' && (selectedYear === 'all' || String(d.dona_yy) === selectedYear))
@@ -196,7 +201,7 @@ const AdminDeposit = () => {
               onChange={(e) => setSelectedYear(e.target.value)}
               className="w-full pl-10 pr-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 transition-all font-bold text-slate-700 appearance-none cursor-pointer"
             >
-              <option value="all">전체 년도</option>
+              <option value="all">전체 연도</option>
               {years.map(y => (
                 <option key={y} value={y}>{y}년</option>
               ))}

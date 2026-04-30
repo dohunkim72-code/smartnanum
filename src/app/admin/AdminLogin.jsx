@@ -28,7 +28,6 @@ const AdminLogin = () => {
 
       if (response.ok && data.success) {
         localStorage.setItem('isAdminAuthenticated', 'true');
-        localStorage.setItem('token', data.token); // 토큰 저장 추가
         localStorage.setItem('adminInfo', JSON.stringify(data.admin));
         navigate('/admin');
       } else {

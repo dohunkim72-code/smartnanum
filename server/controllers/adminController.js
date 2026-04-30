@@ -5,7 +5,6 @@ const path = require('path');
 const ExcelJS = require('exceljs');
 const dayjs = require('dayjs');
 const axios = require('axios');
-const jwt = require('jsonwebtoken');
 const numberToKorean = require('../utils/numberToKorean');
 
 // 엑셀 셀 값 설정을 위한 헬퍼 함수 (병합된 셀 대응)
@@ -260,30 +259,23 @@ const adminController = {
         // 3. 비밀번호 비교 (bcrypt 해시와 평문 모두 지원)
         let isMatch = false;
         try {
-          isMatch = await bcrypt.compare(password, admin.pw);
+          // bcrypt.compare에 전달하기 전에 문자열로 변환 (숫자 입력 등 예외 방지)
+          isMatch = await bcrypt.compare(String(password), String(admin.pw));
         } catch (e) {
           console.error('Bcrypt compare error:', e);
         }
 
         // 평문으로 저장된 비밀번호일 경우를 대비한 하위 호환 로직
-        if (!isMatch && password === admin.pw) {
+        if (!isMatch && String(password) === String(admin.pw)) {
           isMatch = true;
         }
         
         if (isMatch) {
-          // 4. JWT 토큰 생성
-          const token = jwt.sign(
-            { id: admin.id, adminId: admin.referral_code, name: admin.name, grade: admin.grade },
-            process.env.JWT_SECRET || 'smart_nanum_secret_key_2026',
-            { expiresIn: process.env.JWT_EXPIRES_IN || '1d' }
-          );
-
-          // 5. 성공 응답 (비밀번호 제외)
+          // 4. 성공 응답 (비밀번호 제외)
           const { pw, ...adminInfo } = admin;
           res.json({ 
             success: true, 
             message: '로그인 성공!',
-            token: token,
             admin: adminInfo
           });
         } else {

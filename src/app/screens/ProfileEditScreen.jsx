@@ -21,6 +21,7 @@ const ProfileEditScreen = () => {
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isVerified, setIsVerified] = useState(false);
   const [confirmationResult, setConfirmationResult] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   const recaptchaVerifier = useRef(null);
 
@@ -105,7 +106,9 @@ const ProfileEditScreen = () => {
       return;
     }
 
+    if (loading) return;
     try {
+      setLoading(true);
       setupRecaptcha();
       const appVerifier = recaptchaVerifier.current;
       
@@ -162,6 +165,8 @@ const ProfileEditScreen = () => {
       }).catch(err => console.error('SMS Fail Log Error:', err));
 
       showModal('발송 실패', '인증번호 발송 중 오류가 발생했습니다. ' + error.message, true);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -316,10 +321,19 @@ const ProfileEditScreen = () => {
                 {phone !== user.hpno && !isVerified && (
                   <button
                     onClick={handleSendSMS}
-                    className="px-6 h-[72px] bg-gradient-to-br from-primary to-[#5a3df3] text-white font-black rounded-[1.5rem] text-[15px] active:scale-95 transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2"
+                    disabled={loading}
+                    className={`px-6 h-[72px] text-white font-black rounded-[1.5rem] text-[15px] active:scale-95 transition-all shadow-lg flex items-center justify-center gap-2 ${
+                      loading 
+                      ? 'bg-slate-400 shadow-none cursor-not-allowed' 
+                      : 'bg-gradient-to-br from-primary to-[#5a3df3] shadow-primary/20'
+                    }`}
                   >
-                    <span className="material-symbols-outlined text-[20px]">send</span>
-                    인증요청
+                    {loading ? (
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    ) : (
+                      <span className="material-symbols-outlined text-[20px]">send</span>
+                    )}
+                    {loading ? '처리중' : '인증요청'}
                   </button>
                 )}
               </div>

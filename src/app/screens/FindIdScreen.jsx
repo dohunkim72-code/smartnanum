@@ -100,6 +100,7 @@ const FindIdScreen = () => {
       return;
     }
 
+    if (loading) return; // 중복 클릭 방지
     setLoading(true);
     try {
       // 1. 해당 번호로 가입된 사용자가 있는지 먼저 확인
@@ -276,13 +277,14 @@ const FindIdScreen = () => {
             />
             <button 
               onClick={handleSendCode}
+              disabled={loading || (isCodeSent && timer > 0)}
               className={`px-4 rounded-xl font-bold text-sm transition-all whitespace-nowrap shadow-sm ${
-                isCodeSent && timer > 0 
+                (loading || (isCodeSent && timer > 0))
                 ? 'bg-slate-100 text-slate-400 border border-slate-200' 
                 : 'bg-primary text-white active:scale-95'
               }`}
             >
-              {isCodeSent ? '재전송' : '인증번호 전송'}
+              {loading ? '전송중...' : (isCodeSent ? '재전송' : '인증번호 전송')}
             </button>
           </div>
         </div>

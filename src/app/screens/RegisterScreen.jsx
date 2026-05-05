@@ -203,7 +203,7 @@ const RegisterScreen = () => {
       cleanPhone = '82' + cleanPhone.substring(1);
     }
     const phoneNumber = '+' + cleanPhone;
-
+    if (loading) return;
     try {
       setLoading(true);
       
@@ -447,10 +447,14 @@ const RegisterScreen = () => {
                 <button 
                   type="button"
                   onClick={handleSendSMS}
-                  disabled={isPhoneVerified}
-                  className={`px-4 rounded-xl font-bold text-sm shrink-0 whitespace-nowrap active:scale-95 transition-transform ${isPhoneVerified ? 'bg-green-100 text-green-600' : 'bg-primary/10 text-primary'}`}
+                  disabled={loading || isPhoneVerified}
+                  className={`px-4 rounded-xl font-bold text-sm shrink-0 whitespace-nowrap active:scale-95 transition-transform ${
+                    (loading || isPhoneVerified) 
+                    ? 'bg-slate-100 text-slate-400 border border-slate-200' 
+                    : 'bg-primary/10 text-primary'
+                  }`}
                 >
-                  {isPhoneVerified ? '인증완료' : (isSmsSent ? '재전송' : '인증번호 전송')}
+                  {loading ? '전송중...' : (isPhoneVerified ? '인증완료' : (isSmsSent ? '재전송' : '인증번호 전송'))}
                 </button>
               </div>
               <div className="relative">

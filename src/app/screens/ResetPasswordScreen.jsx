@@ -75,6 +75,7 @@ const ResetPasswordScreen = () => {
       return;
     }
 
+    if (loading) return; // 중복 클릭 방지
     setLoading(true);
     try {
       // 1. DB에서 사용자 존재 여부 확인
@@ -92,11 +93,21 @@ const ResetPasswordScreen = () => {
       }
 
       // 2. Firebase Recaptcha 설정
-      if (!window.recaptchaVerifier) {
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-          size: 'invisible',
-        });
+      if (window.recaptchaVerifier) {
+        try {
+          window.recaptchaVerifier.clear();
+        } catch (e) {
+          console.log('Recaptcha clear error:', e);
+        }
+        window.recaptchaVerifier = null;
       }
+
+      const container = document.getElementById('recaptcha-container');
+      if (container) container.innerHTML = '';
+
+      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+      });
 
       // 3. 인증번호 발송
       const formattedPhone = `+82${phoneNumber.replace(/-/g, '').substring(1)}`;

@@ -20,6 +20,22 @@ exports.getInitData = async (req, res) => {
 
     const [endDateInfo] = await db.execute('SELECT endDate AS end_date FROM endDate WHERE dona_yy = ?', [currentYear]);
     
+    // 마감 여부 체크
+    let isClosed = false;
+    if (endDateInfo.length > 0 && endDateInfo[0].end_date) {
+      const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '.');
+      if (todayStr > endDateInfo[0].end_date) {
+        isClosed = true;
+      }
+    }
+
+    // 전년도 미납 체크 (이전 모든 연도에 대해 goods_amt > deposit_amt 인 건이 있는지 확인)
+    const [unpaidResult] = await db.execute(
+      'SELECT COUNT(*) as count FROM donation_detail WHERE cust_no = ? AND dona_yy < ? AND goods_amt > deposit_amt',
+      [custNo, currentYear]
+    );
+    const hasUnpaid = unpaidResult[0].count > 0;
+
     // 당해년도 마스터 조회
     const [currentMaster] = await db.execute(
       'SELECT * FROM donation_master WHERE cust_no = ? AND dona_yy = ?', 
@@ -58,6 +74,8 @@ exports.getInitData = async (req, res) => {
     res.json({
       user: user[0],
       endDate: endDateInfo.length > 0 ? endDateInfo[0].end_date : null,
+      isClosed: isClosed,
+      hasUnpaid: hasUnpaid,
       master: master,
       details: currentDetails, // 금년도 상세 내역들
       isCurrentYear: currentMaster.length > 0
@@ -115,6 +133,17 @@ exports.applyDonation = async (req, res) => {
         await connection.rollback();
         return res.status(400).json({ message: `신청 기간이 마감되었습니다. (${endDateInfo[0].end_date}까지)` });
       }
+    }
+
+    // 2. 전년도 미납 체크
+    const [unpaidResult] = await connection.execute(
+      'SELECT COUNT(*) as count FROM donation_detail WHERE cust_no = ? AND dona_yy < ? AND goods_amt > deposit_amt',
+      [cust_no, currentYear]
+    );
+    if (unpaidResult[0].count > 0) {
+      console.warn('미납 내역 존재:', cust_no);
+      await connection.rollback();
+      return res.status(400).json({ message: '이전 연도 기부금의 입금이 완료 되어야 신청이 가능 합니다.' });
     }
 
     if (seq_no) {

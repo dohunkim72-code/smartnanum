@@ -61,6 +61,7 @@ const DonationScreen = () => {
   });
 
   const [isClosed, setIsClosed] = useState(false);
+  const [hasUnpaid, setHasUnpaid] = useState(false);
 
   // 서버에서 데이터 가져오기
   const fetchInitData = async () => {
@@ -80,6 +81,7 @@ const DonationScreen = () => {
         });
 
         if (data.isClosed) setIsClosed(true);
+        if (data.hasUnpaid) setHasUnpaid(true);
 
         setFormData(prev => {
           const user = data.user || {};
@@ -254,6 +256,11 @@ const DonationScreen = () => {
       showAlert('알림', '신청 기간이 마감되었습니다. 🛑', 'error');
       return;
     }
+
+    if (hasUnpaid) {
+      showAlert('알림', '이전 연도 기부금의 입금이 완료 되어야 신청이 가능 합니다. 💰', 'info');
+      return;
+    }
     
     // 필수 항목 검증
     if (!formData.residentIdFront || !formData.residentIdBack) {
@@ -399,9 +406,15 @@ const DonationScreen = () => {
             <div className="absolute -right-8 -top-8 size-32 rounded-full bg-white/10 blur-2xl"></div>
             <div className="relative z-10">
               <h3 className="text-xl font-black leading-tight">연말정산 기부금<br/>간편 발급 서비스</h3>
-              <p className="mt-2 text-sm font-medium text-white/80">
-                {initData.endDate ? `마감일: ${initData.endDate} ⏳` : '소득공제를 위한 정보를 입력해 주세요.'}
-              </p>
+              {hasUnpaid ? (
+                <p className="mt-2 text-sm font-medium text-amber-300 animate-pulse">
+                  이전 연도 미납 내역이 있습니다. 입금 후 신청 가능합니다. ⚠️
+                </p>
+              ) : (
+                <p className="mt-2 text-sm font-medium text-white/80">
+                  {initData.endDate ? `마감일: ${initData.endDate} ⏳` : '소득공제를 위한 정보를 입력해 주세요.'}
+                </p>
+              )}
             </div>
           </section>
         )}

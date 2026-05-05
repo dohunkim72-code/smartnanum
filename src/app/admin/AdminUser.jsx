@@ -17,17 +17,21 @@ import {
   UserCheck,
   ChevronDown
 } from 'lucide-react';
+import api from '../../lib/api';
 
 /**
  * 회원 관리 (Donor/Member Management)
  * 기부자 정보를 조회하고 관리합니다.
  */
 const AdminUser = () => {
+  const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+  const isSuperAdmin = adminInfo.grade === '01';
+
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [joinYear, setJoinYear] = useState('all');
-  const [referralFilter, setReferralFilter] = useState('');
+  const [referralFilter, setReferralFilter] = useState(isSuperAdmin ? '' : (adminInfo.referral_code || ''));
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -61,11 +65,8 @@ const AdminUser = () => {
         referralCode: referralFilter
       }).toString();
 
-      const response = await fetch(`/api/admin/users?${query}`);
-      const data = await response.json();
-      if (response.ok) {
-        setUsers(data);
-      }
+      const data = await api.get(`/admin/users?${query}`);
+      setUsers(data);
     } catch (error) {
       console.error('회원 조회 오류:', error);
     } finally {
@@ -75,11 +76,8 @@ const AdminUser = () => {
 
   const fetchReferrals = async () => {
     try {
-      const response = await fetch('/api/admin/referrals');
-      const data = await response.json();
-      if (response.ok) {
-        setReferrals(data);
-      }
+      const data = await api.get('/admin/referrals');
+      setReferrals(data);
     } catch (error) {
       console.error('추천인 목록 조회 오류:', error);
     }
@@ -120,7 +118,7 @@ const AdminUser = () => {
         name: '',
         email_add: '',
         hpno: '',
-        referral_code: '',
+        referral_code: isSuperAdmin ? '' : (adminInfo.referral_code || ''),
         note: ''
       });
     }
@@ -134,38 +132,31 @@ const AdminUser = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
     const adminId = adminInfo.referral_code || 'admin';
-
-    const method = currentUser ? 'PUT' : 'POST';
     const body = { ...formData, reg_id: adminId, upd_id: adminId };
 
     try {
-      const response = await fetch('/api/admin/users', {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-
-      if (response.ok) {
-        setStatusModal({
-          show: true,
-          type: 'success',
-          message: currentUser ? '회원 정보가 수정되었습니다.' : '새로운 회원이 등록되었습니다.'
-        });
-        closeModal();
-        fetchUsers();
-        setTimeout(() => setStatusModal(prev => ({ ...prev, show: false })), 2000);
+      if (currentUser) {
+        await api.put('/admin/users', body);
       } else {
-        const error = await response.json();
-        setStatusModal({
-          show: true,
-          type: 'error',
-          message: error.message || '처리 중 오류가 발생했습니다.'
-        });
+        await api.post('/admin/users', body);
       }
+
+      setStatusModal({
+        show: true,
+        type: 'success',
+        message: currentUser ? '회원 정보가 수정되었습니다.' : '새로운 회원이 등록되었습니다.'
+      });
+      closeModal();
+      fetchUsers();
+      setTimeout(() => setStatusModal(prev => ({ ...prev, show: false })), 2000);
     } catch (error) {
       console.error('회원 저장 오류:', error);
+      setStatusModal({
+        show: true,
+        type: 'error',
+        message: error.message || '처리 중 오류가 발생했습니다.'
+      });
     }
   };
 
@@ -177,28 +168,20 @@ const AdminUser = () => {
       actionLabel: '삭제하기',
       onConfirm: async () => {
         try {
-          const response = await fetch(`/api/admin/users/${cust_no}`, {
-            method: 'DELETE'
+          await api.delete(`/admin/users/${cust_no}`);
+          setStatusModal({
+            show: true,
+            type: 'success',
+            message: '회원이 삭제되었습니다.'
           });
-
-          if (response.ok) {
-            setStatusModal({
-              show: true,
-              type: 'success',
-              message: '회원이 삭제되었습니다.'
-            });
-            fetchUsers();
-            setTimeout(() => setStatusModal(prev => ({ ...prev, show: false })), 2000);
-          } else {
-            const error = await response.json();
-            setStatusModal({
-              show: true,
-              type: 'error',
-              message: error.message || '삭제 중 오류가 발생했습니다.'
-            });
-          }
+          fetchUsers();
+          setTimeout(() => setStatusModal(prev => ({ ...prev, show: false })), 2000);
         } catch (error) {
-          console.error('회원 삭제 오류:', error);
+          setStatusModal({
+            show: true,
+            type: 'error',
+            message: error.message || '삭제 중 오류가 발생했습니다.'
+          });
         }
       }
     });
@@ -270,15 +253,16 @@ const AdminUser = () => {
           </div>
 
           {/* 추천인 필터 */}
-          <div className="relative">
+          <div className={`relative ${!isSuperAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}>
             <UserCheck className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
             <select
               value={referralFilter}
-              onChange={(e) => setReferralFilter(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all outline-none font-bold appearance-none cursor-pointer"
+              onChange={(e) => isSuperAdmin && setReferralFilter(e.target.value)}
+              disabled={!isSuperAdmin}
+              className="w-full pl-10 pr-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all outline-none font-bold appearance-none cursor-pointer disabled:cursor-not-allowed"
             >
-              <option value="">모든 추천인</option>
-              {referrals.map(r => (
+              {isSuperAdmin && <option value="">모든 추천인</option>}
+              {referrals.filter(r => isSuperAdmin || r.referral_code === adminInfo.referral_code).map(r => (
                 <option key={r.referral_code} value={r.referral_code}>
                   {r.name} ({r.referral_code})
                 </option>
@@ -449,10 +433,11 @@ const AdminUser = () => {
                       <select
                         value={formData.referral_code}
                         onChange={(e) => setFormData({ ...formData, referral_code: e.target.value })}
-                        className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-blue-500 outline-none transition-all font-bold appearance-none cursor-pointer"
+                        disabled={!isSuperAdmin}
+                        className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-blue-500 outline-none transition-all font-bold appearance-none cursor-pointer disabled:bg-slate-100 disabled:text-slate-500"
                       >
-                        <option value="">추천인 없음 (직접가입)</option>
-                        {referrals.map(r => (
+                        {isSuperAdmin && <option value="">추천인 없음 (직접가입)</option>}
+                        {referrals.filter(r => isSuperAdmin || r.referral_code === adminInfo.referral_code).map(r => (
                           <option key={r.referral_code} value={r.referral_code}>
                             {r.name} ({r.referral_code})
                           </option>

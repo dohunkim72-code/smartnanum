@@ -23,7 +23,11 @@ import {
   PenTool,
   RotateCcw
 } from 'lucide-react';
+import api from '../../lib/api';
 const AdminDonation = () => {
+  const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+  const isSuperAdmin = adminInfo.grade === '01';
+
   const [donations, setDonations] = useState([]);
   const [loading, setLoading] = useState(true);
   const canvasRef = useRef(null);
@@ -32,7 +36,7 @@ const AdminDonation = () => {
   const [filters, setFilters] = useState({
     dona_yy: new Date().getFullYear().toString(),
     searchTerm: '',
-    referral_code: '',
+    referral_code: isSuperAdmin ? '' : (adminInfo.referral_code || ''),
     step_code: 'all',
     deposit_yn: 'all'
   });
@@ -96,11 +100,8 @@ const AdminDonation = () => {
     try {
       setLoading(true);
       const query = new URLSearchParams(filters).toString();
-      const response = await fetch(`/api/admin/donations?${query}`);
-      const data = await response.json();
-      if (response.ok) {
-        setDonations(data);
-      }
+      const data = await api.get(`/admin/donations?${query}`);
+      setDonations(data);
     } catch (error) {
       console.error('기부 내역 조회 오류:', error);
     } finally {
@@ -110,17 +111,15 @@ const AdminDonation = () => {
 
   const fetchReferrals = async () => {
     try {
-      const response = await fetch('/api/admin/referrals');
-      const data = await response.json();
-      if (response.ok) setReferrals(data);
+      const data = await api.get('/admin/referrals');
+      setReferrals(data);
     } catch (error) { console.error(error); }
   };
 
   const fetchUserList = async () => {
     try {
-      const response = await fetch('/api/admin/users');
-      const data = await response.json();
-      if (response.ok) setUsers(data);
+      const data = await api.get('/admin/users');
+      setUsers(data);
     } catch (error) { console.error(error); }
   };
 
@@ -207,23 +206,18 @@ const AdminDonation = () => {
     
     try {
       // 최근 정보 가져오기 시도
-      const response = await fetch(`/api/admin/donations/recent/${user.cust_no}`);
-      if (response.ok) {
-        const recent = await response.json();
-        setFormData(prev => ({
-          ...prev,
-          cust_no: user.cust_no,
-          name: user.name,
-          hpno: user.hpno,
-          jmin1: recent?.jmin1 || user.jmin1 || '',
-          jmin2: recent?.jmin2 || user.jmin2 || '',
-          zipcode: recent?.zipcode || user.zipcode || '',
-          address: recent?.address || user.address || '',
-          address_detail: recent?.address_detail || user.address_detail || ''
-        }));
-      } else {
-        throw new Error('No recent data');
-      }
+      const recent = await api.get(`/admin/donations/recent/${user.cust_no}`);
+      setFormData(prev => ({
+        ...prev,
+        cust_no: user.cust_no,
+        name: user.name,
+        hpno: user.hpno,
+        jmin1: recent?.jmin1 || user.jmin1 || '',
+        jmin2: recent?.jmin2 || user.jmin2 || '',
+        zipcode: recent?.zipcode || user.zipcode || '',
+        address: recent?.address || user.address || '',
+        address_detail: recent?.address_detail || user.address_detail || ''
+      }));
     } catch (error) {
       setFormData(prev => ({
         ...prev,
@@ -278,24 +272,19 @@ const AdminDonation = () => {
       // 원본 배열 삭제
       delete payload.agrees;
 
-      const method = currentDona ? 'PUT' : 'POST';
-      const response = await fetch('/api/admin/donations', {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (response.ok) {
-        showStatus('success', '저장 완료', currentDona ? '내역이 성공적으로 수정되었습니다.' : '신규 기부 신청이 등록되었습니다.');
-        setIsModalOpen(false);
-        fetchDonations();
+      const endpoint = '/admin/donations';
+      if (currentDona) {
+        await api.put(endpoint, payload);
       } else {
-        const error = await response.json();
-        showStatus('error', '저장 실패', error.message || '저장 중 오류가 발생했습니다.');
+        await api.post(endpoint, payload);
       }
+
+      showStatus('success', '저장 완료', currentDona ? '내역이 성공적으로 수정되었습니다.' : '신규 기부 신청이 등록되었습니다.');
+      setIsModalOpen(false);
+      fetchDonations();
     } catch (error) {
       console.error(error);
-      showStatus('error', '오류 발생', '처리 중 예기치 못한 오류가 발생했습니다.');
+      showStatus('error', '저장 실패', error.message || '처리 중 예기치 못한 오류가 발생했습니다.');
     }
   };
 
@@ -306,18 +295,12 @@ const AdminDonation = () => {
       '이 기부 신청 내역을 삭제하시겠습니까?\n삭제된 데이터는 복구할 수 없습니다.',
       async () => {
         try {
-          const response = await fetch(`/api/admin/donations/${dona.cust_no}/${dona.dona_yy}/${dona.seq_no}`, {
-            method: 'DELETE'
-          });
-          if (response.ok) {
-            showStatus('success', '삭제 완료', '내역이 정상적으로 삭제되었습니다.');
-            fetchDonations();
-          } else {
-            showStatus('error', '삭제 실패', '삭제 중 오류가 발생했습니다.');
-          }
+          await api.delete(`/admin/donations/${dona.cust_no}/${dona.dona_yy}/${dona.seq_no}`);
+          showStatus('success', '삭제 완료', '내역이 정상적으로 삭제되었습니다.');
+          fetchDonations();
         } catch (error) { 
           console.error(error);
-          showStatus('error', '오류 발생', '처리 중 예기치 못한 오류가 발생했습니다.');
+          showStatus('error', '삭제 실패', error.message || '삭제 중 오류가 발생했습니다.');
         }
       },
       '삭제'
@@ -384,15 +367,20 @@ const AdminDonation = () => {
             />
           </div>
 
-          <div className="relative">
+          <div className={`relative ${!isSuperAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}>
             <UserCheck className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <select
               value={filters.referral_code}
-              onChange={(e) => setFilters({ ...filters, referral_code: e.target.value })}
-              className="w-full pl-9 pr-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all outline-none font-bold appearance-none cursor-pointer"
+              onChange={(e) => isSuperAdmin && setFilters({ ...filters, referral_code: e.target.value })}
+              disabled={!isSuperAdmin}
+              className="w-full pl-9 pr-4 py-3 bg-slate-50 border-transparent rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white transition-all outline-none font-bold appearance-none cursor-pointer disabled:cursor-not-allowed"
             >
-              <option value="">모든 추천인</option>
-              {referrals.map(r => <option key={r.referral_code} value={r.referral_code}>{r.name}</option>)}
+              {isSuperAdmin && <option value="">모든 추천인</option>}
+              {referrals.filter(r => isSuperAdmin || r.referral_code === adminInfo.referral_code).map(r => (
+                <option key={r.referral_code} value={r.referral_code}>
+                  {r.name}
+                </option>
+              ))}
             </select>
           </div>
 

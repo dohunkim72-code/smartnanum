@@ -18,11 +18,15 @@ import {
  * 기부 신청 내역 중 입금 대기 상태인 항목을 조회하고 입금 완료 처리를 수행합니다.
  */
 const AdminDeposit = () => {
+  const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+  const isSuperAdmin = adminInfo.grade === '01';
+
   const [deposits, setDeposits] = useState([]);
   const [years, setYears] = useState([]); // 년도 목록
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString()); // 선택된 년도 (기본값: 올해)
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [referralSearchTerm, setReferralSearchTerm] = useState(isSuperAdmin ? '' : (adminInfo.name || ''));
   const [statusFilter, setStatusFilter] = useState('04'); // 04: 입금 대기 (사용자 정의 기준)
   const [statusModal, setStatusModal] = useState({ show: false, type: 'success', message: '' });
 
@@ -115,11 +119,12 @@ const AdminDeposit = () => {
   const filteredDeposits = deposits.filter(item => {
     const matchesSearch = (item.cust_name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                         (item.hpno || '').includes(searchTerm);
+    const matchesReferral = (item.referral_name || '').toLowerCase().includes(referralSearchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'all' || 
                         (statusFilter === '04' && item.deposit_yn !== 'Y') ||
                         (statusFilter === '02' && item.deposit_yn === 'Y');
     const matchesYear = selectedYear === 'all' || String(item.dona_yy) === selectedYear;
-    return matchesSearch && matchesStatus && matchesYear;
+    return matchesSearch && matchesReferral && matchesStatus && matchesYear;
   });
 
   return (
@@ -209,6 +214,18 @@ const AdminDeposit = () => {
           </div>
         </div>
 
+        {/* 추천인 필터 추가 */}
+        <div className="flex-1 md:max-w-[200px] relative w-full">
+          <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <input 
+            type="text" 
+            placeholder="추천인명..."
+            value={referralSearchTerm}
+            onChange={(e) => setReferralSearchTerm(e.target.value)}
+            className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 transition-all font-medium"
+          />
+        </div>
+
         <div className="flex-1 relative w-full">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input 
@@ -250,6 +267,7 @@ const AdminDeposit = () => {
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
                 <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider">신청일 / 기부자</th>
+                <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider">추천인</th>
                 <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-right">기부 신청액</th>
                 <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-right">물품 대금</th>
                 <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-right">입금액</th>
@@ -282,6 +300,9 @@ const AdminDeposit = () => {
                           </div>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-6 py-6">
+                      <p className="text-[14px] font-bold text-slate-600">{item.referral_name || '-'}</p>
                     </td>
                     <td className="px-6 py-6 text-right">
                       <p className="text-sm font-black text-slate-900">₩{(item.dona_amt || 0).toLocaleString()}</p>
@@ -324,7 +345,7 @@ const AdminDeposit = () => {
                 ))
               ) : (
                 <tr>
-                  <td colSpan="7" className="px-8 py-20 text-center">
+                  <td colSpan="8" className="px-8 py-20 text-center">
                     <div className="flex flex-col items-center justify-center opacity-30">
                       <AlertCircle size={48} className="mb-4 text-slate-300" />
                       <p className="text-lg font-bold text-slate-400">조회된 입금 내역이 없습니다.</p>

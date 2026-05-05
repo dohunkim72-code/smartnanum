@@ -12,6 +12,7 @@ import {
   Check,
   AlertCircle
 } from 'lucide-react';
+import api from '../../lib/api';
 
 /**
  * 관리자(추천인) 계정 관리 페이지
@@ -42,23 +43,20 @@ const AdminManagement = () => {
   const fetchManagers = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/admin/managers');
-      const data = await response.json();
+      // 공통 api 유틸리티 사용 (토큰 자동 포함)
+      const data = await api.get('/admin/managers');
       console.log('Fetched managers data:', data);
 
-      if (response.ok && Array.isArray(data)) {
+      if (Array.isArray(data)) {
         setManagers(data);
       } else {
-        console.error('Invalid managers data:', data);
-        setManagers([]); // 에러 시 빈 배열로 초기화하여 크래시 방지
-        if (!response.ok) {
-          // 서버 에러(500 등)인 경우 콘솔에 출력 (알림창은 너무 잦을 수 있어 생략)
-          console.error('Server error message:', data.message);
-        }
+        console.error('Invalid managers data format:', data);
+        setManagers([]);
       }
     } catch (error) {
       console.error('Managers fetch error:', error);
       setManagers([]);
+      // 401 에러 등은 api.js에서 처리되거나 여기서 추가 처리 가능
     } finally {
       setIsLoading(false);
     }
@@ -107,50 +105,41 @@ const AdminManagement = () => {
     }
 
     if (!currentManager && !formData.pw) {
-      alert('비밀번호를 입력해주세요.');
+      setStatusModal({
+        show: true,
+        type: 'error',
+        message: '새로운 관리자 등록을 위해 비밀번호를 입력해주세요.'
+      });
       return;
     }
 
     setIsLoading(true);
 
-    const method = currentManager ? 'PUT' : 'POST';
-    const body = currentManager ? { ...formData, id: currentManager.id } : formData;
-
     try {
-      const response = await fetch('/api/admin/managers', {
-        method,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
+      // 공통 api 유틸리티 사용
+      const endpoint = '/admin/managers';
+      const result = currentManager 
+        ? await api.put(endpoint, { ...formData, id: currentManager.id })
+        : await api.post(endpoint, formData);
+
+      setStatusModal({
+        show: true,
+        type: 'success',
+        message: currentManager ? '성공적으로 수정되었습니다.' : '새로운 관리자가 등록되었습니다.'
       });
-
-      const result = await response.json();
-
-      if (response.ok) {
-        setStatusModal({
-          show: true,
-          type: 'success',
-          message: currentManager ? '성공적으로 수정되었습니다.' : '새로운 관리자가 등록되었습니다.'
-        });
-        setIsModalOpen(false);
-        fetchManagers();
-        
-        // 성공 시 2초 후 자동 닫기
-        setTimeout(() => {
-          setStatusModal(prev => ({ ...prev, show: false }));
-        }, 2000);
-      } else {
-        setStatusModal({
-          show: true,
-          type: 'error',
-          message: result.message || '오류가 발생했습니다.'
-        });
-      }
+      setIsModalOpen(false);
+      fetchManagers();
+      
+      // 성공 시 2초 후 자동 닫기
+      setTimeout(() => {
+        setStatusModal(prev => ({ ...prev, show: false }));
+      }, 2000);
     } catch (error) {
       console.error('Submit error:', error);
       setStatusModal({
         show: true,
         type: 'error',
-        message: '서버와 통신할 수 없습니다. 백엔드 서버를 확인해주세요.'
+        message: error.message || '서버와 통신 중 오류가 발생했습니다.'
       });
     } finally {
       setIsLoading(false);
@@ -165,36 +154,25 @@ const AdminManagement = () => {
       actionLabel: '삭제하기',
       onConfirm: async () => {
         try {
-          const response = await fetch(`/api/admin/managers/${id}`, {
-            method: 'DELETE',
+          await api.delete(`/admin/managers/${id}`);
+          setStatusModal({
+            show: true,
+            type: 'success',
+            message: '관리자가 성공적으로 삭제되었습니다.'
           });
-
-          if (response.ok) {
-            setStatusModal({
-              show: true,
-              type: 'success',
-              message: '관리자가 성공적으로 삭제되었습니다.'
-            });
-            fetchManagers();
-            setTimeout(() => setStatusModal(prev => ({ ...prev, show: false })), 2000);
-          } else {
-            const result = await response.json();
-            setStatusModal({
-              show: true,
-              type: 'error',
-              message: result.message || '삭제 중 오류가 발생했습니다.'
-            });
-          }
+          fetchManagers();
+          setTimeout(() => setStatusModal(prev => ({ ...prev, show: false })), 2000);
         } catch (error) {
           setStatusModal({
             show: true,
             type: 'error',
-            message: '서버와 통신할 수 없습니다.'
+            message: error.message || '삭제 중 오류가 발생했습니다.'
           });
         }
       }
     });
   };
+
 
   const filteredManagers = Array.isArray(managers) ? managers.filter(m =>
     m && (m.name?.includes(searchTerm) || m.referral_code?.includes(searchTerm))

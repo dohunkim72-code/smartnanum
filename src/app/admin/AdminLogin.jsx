@@ -29,6 +29,7 @@ const AdminLogin = () => {
       if (response.ok && data.success) {
         localStorage.setItem('isAdminAuthenticated', 'true');
         localStorage.setItem('adminInfo', JSON.stringify(data.admin));
+        localStorage.setItem('token', data.token); // 관리자 토큰 저장
         navigate('/admin');
       } else {
         setError(data.message || '아이디 또는 비밀번호가 올바르지 않습니다.');

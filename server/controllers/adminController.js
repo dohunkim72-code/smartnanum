@@ -47,27 +47,52 @@ const adminController = {
   // 대시보드 요약 통계 조회
   getDashboardStats: async (req, res) => {
     try {
+      const { grade, referral_code: adminReferralCode } = req.user;
       const currentYear = new Date().getFullYear().toString();
 
       // 1. 총 회원 수
-      const [userCount] = await db.execute('SELECT COUNT(*) as count FROM cust');
+      let userQuery = 'SELECT COUNT(*) as count FROM cust';
+      let userParams = [];
+      if (grade !== '01') {
+        userQuery += ' WHERE referral_code = ?';
+        userParams.push(adminReferralCode);
+      }
+      const [userCount] = await db.execute(userQuery, userParams);
       
+      // 기부 관련 쿼리 공통 필터링 로직
+      const getDonaFilter = (whereClause = '') => {
+        let q = whereClause;
+        let p = [];
+        if (grade !== '01') {
+          q += (q ? ' AND ' : ' WHERE ') + 'EXISTS (SELECT 1 FROM cust c WHERE c.cust_no = d.cust_no AND c.referral_code = ?)';
+          p.push(adminReferralCode);
+        }
+        return { q, p };
+      };
+
       // 2. 당해년도 기부 요청 금액 합계
+      const reqAmtFilter = getDonaFilter('WHERE d.dona_yy = ?');
       const [requestedAmt] = await db.execute(
-        'SELECT SUM(dona_amt) as total FROM donation_detail WHERE dona_yy = ?', 
-        [currentYear]
+        `SELECT SUM(d.dona_amt) as total FROM donation_detail d ${reqAmtFilter.q}`, 
+        [currentYear, ...reqAmtFilter.p]
       );
 
-      // 3. 당해년도 기부 완료 금액 합계 (step_code '04'를 완료로 가정)
+      // 3. 당해년도 기부 완료 금액 합계
+      const compAmtFilter = getDonaFilter("WHERE d.dona_yy = ? AND d.step_code = '04'");
       const [completedAmt] = await db.execute(
-        "SELECT SUM(real_amt) as total FROM donation_detail WHERE dona_yy = ? AND step_code = '04'", 
-        [currentYear]
+        `SELECT SUM(d.real_amt) as total FROM donation_detail d ${compAmtFilter.q}`, 
+        [currentYear, ...compAmtFilter.p]
       );
       
-      // 4. 승인 대기 건수 (상태코드가 '01'인 경우)
-      const [pendingCount] = await db.execute("SELECT COUNT(*) as count FROM donation_detail WHERE step_code = '01'");
+      // 4. 승인 대기 건수
+      const pendingFilter = getDonaFilter("WHERE d.step_code = '01'");
+      const [pendingCount] = await db.execute(
+        `SELECT COUNT(*) as count FROM donation_detail d ${pendingFilter.q}`, 
+        pendingFilter.p
+      );
       
-      // 5. 문자 발송 성공률
+      // 5. 문자 발송 성공률 (전체 통계 유지 또는 추천인별 발송 로그가 있다면 필터링 가능)
+      // 현재 SMS 로그에는 추천인 정보가 없으므로 전체 통계 유지
       const [smsStats] = await db.execute(`
         SELECT 
           COUNT(*) as total,
@@ -75,18 +100,20 @@ const adminController = {
         FROM TB_SMS_LOG
       `);
 
-      // 6. 월별 기부 추이 (최근 7개월, 신청 금액 기준)
+      // 6. 월별 기부 추이 (최근 7개월)
+      const trendFilter = getDonaFilter('WHERE d.reg_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)');
       const [monthlyTrend] = await db.execute(`
         SELECT 
-          DATE_FORMAT(reg_date, '%m월') as name,
-          SUM(dona_amt) as amt
-        FROM donation_detail
-        WHERE reg_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-        GROUP BY DATE_FORMAT(reg_date, '%Y-%m'), DATE_FORMAT(reg_date, '%m월')
-        ORDER BY DATE_FORMAT(reg_date, '%Y-%m') ASC
-      `);
+          DATE_FORMAT(d.reg_date, '%m월') as name,
+          SUM(d.dona_amt) as amt
+        FROM donation_detail d
+        ${trendFilter.q}
+        GROUP BY DATE_FORMAT(d.reg_date, '%Y-%m'), DATE_FORMAT(d.reg_date, '%m월')
+        ORDER BY DATE_FORMAT(d.reg_date, '%Y-%m') ASC
+      `, trendFilter.p);
 
-      // 7. 최근 기부 신청 내역 (5건, 신청 금액 기준)
+      // 7. 최근 기부 신청 내역
+      const recentFilter = getDonaFilter('');
       const [recentDonations] = await db.execute(`
         SELECT 
           d.seq_no as id,
@@ -100,9 +127,10 @@ const adminController = {
           END as status
         FROM donation_detail d
         JOIN cust c ON d.cust_no = c.cust_no
+        ${recentFilter.q ? recentFilter.q.replace('EXISTS (SELECT 1 FROM cust c WHERE c.cust_no = d.cust_no AND c.referral_code = ?)', 'c.referral_code = ?') : ''}
         ORDER BY d.reg_date DESC
         LIMIT 5
-      `);
+      `, recentFilter.p);
 
       res.json({
         userCount: userCount[0].count,
@@ -127,16 +155,29 @@ const adminController = {
   // 기부 신청 목록 조회
   getDonations: async (req, res) => {
     try {
+      const { grade, referral_code } = req.user;
+      let whereClause = 'WHERE 1=1';
+      const params = [];
+
+      // 일반 관리자인 경우 본인 추천 데이터만 조회
+      if (grade !== '01') {
+        whereClause += ' AND c.referral_code = ?';
+        params.push(referral_code);
+      }
+
       const query = `
         SELECT 
           d.*, 
           c.name as user_name,
-          c.hpno as user_hpno
+          c.hpno as user_hpno,
+          r.name as referral_name
         FROM donation_detail d
         LEFT JOIN cust c ON d.cust_no = c.cust_no
+        LEFT JOIN referral r ON c.referral_code = r.referral_code
+        ${whereClause}
         ORDER BY d.reg_date DESC
       `;
-      const [rows] = await db.execute(query);
+      const [rows] = await db.execute(query, params);
       res.json(rows);
     } catch (error) {
       console.error('기부 목록 조회 오류:', error);
@@ -271,11 +312,25 @@ const adminController = {
         }
         
         if (isMatch) {
-          // 4. 성공 응답 (비밀번호 제외)
+          // 4. JWT 토큰 생성 (관리자 정보 포함)
+          const jwt = require('jsonwebtoken');
+          const token = jwt.sign(
+            { 
+              id: admin.id, 
+              referral_code: admin.referral_code, 
+              name: admin.name, 
+              grade: admin.grade 
+            },
+            process.env.JWT_SECRET,
+            { expiresIn: '24h' }
+          );
+
+          // 5. 성공 응답 (비밀번호 제외)
           const { pw, ...adminInfo } = admin;
           res.json({ 
             success: true, 
             message: '로그인 성공!',
+            token,
             admin: adminInfo
           });
         } else {
@@ -750,7 +805,14 @@ const adminController = {
   // --- 회원 관리 (cust 테이블) ---
   getUsers: async (req, res) => {
     try {
-      const { searchTerm, joinYear, referralCode } = req.query;
+      const { grade, referral_code: adminReferralCode } = req.user;
+      let { searchTerm, joinYear, referralCode } = req.query;
+      
+      // 일반 관리자인 경우 추천인 코드를 본인 것으로 강제 고정
+      if (grade !== '01') {
+        referralCode = adminReferralCode;
+      }
+
       let query = `
         SELECT 
           cust_no, id, name, email_add, hpno, referral_code, note, reg_date,
@@ -787,7 +849,13 @@ const adminController = {
   },
 
   createUser: async (req, res) => {
-    const { id, pw, name, email_add, hpno, referral_code, note, reg_id } = req.body;
+    let { id, pw, name, email_add, hpno, referral_code, note, reg_id } = req.body;
+    const { grade, referral_code: adminReferralCode } = req.user;
+
+    // 일반 관리자인 경우 추천인 코드를 본인 것으로 강제 고정
+    if (grade !== '01') {
+      referral_code = adminReferralCode;
+    }
     try {
       // 아이디 중복 체크
       const [existing] = await db.execute('SELECT id FROM cust WHERE id = ?', [id]);
@@ -821,7 +889,17 @@ const adminController = {
   },
 
   updateUser: async (req, res) => {
-    const { cust_no, name, email_add, hpno, referral_code, note, pw, upd_id } = req.body;
+    let { cust_no, name, email_add, hpno, referral_code, note, pw, upd_id } = req.body;
+    const { grade, referral_code: adminReferralCode } = req.user;
+
+    // 일반 관리자인 경우 타인의 정보를 수정할 수 없도록 체크 (추천인 코드 확인)
+    if (grade !== '01') {
+      const [user] = await db.execute('SELECT referral_code FROM cust WHERE cust_no = ?', [cust_no]);
+      if (user.length === 0 || user[0].referral_code !== adminReferralCode) {
+        return res.status(403).json({ message: '본인이 추천한 회원 정보만 수정할 수 있습니다.' });
+      }
+      referral_code = adminReferralCode; // 추천인 코드 변경 방지
+    }
     try {
       let query = 'UPDATE cust SET name = ?, email_add = ?, hpno = ?, referral_code = ?, note = ?, upd_date = NOW(), upd_id = ?';
       const params = [name, email_add, hpno, referral_code, note, upd_id || 'admin'];
@@ -942,6 +1020,18 @@ const adminController = {
 
   createDonation: async (req, res) => {
     const connection = await db.getConnection();
+    const { grade, referral_code: adminReferralCode } = req.user;
+    const { cust_no } = req.body;
+
+    // 일반 관리자인 경우 해당 회원이 본인 추천인지 확인
+    if (grade !== '01') {
+      const [user] = await db.execute('SELECT referral_code FROM cust WHERE cust_no = ?', [cust_no]);
+      if (user.length === 0 || user[0].referral_code !== adminReferralCode) {
+        connection.release();
+        return res.status(403).json({ message: '본인이 추천한 회원의 기부 신청만 등록할 수 있습니다.' });
+      }
+    }
+
     try {
       await connection.beginTransaction();
       const { 
@@ -1436,17 +1526,22 @@ const adminController = {
       console.log('getSettlementSummary 호출됨:', { dona_yy, referral_name, referral_code });
       
       // 공통 필터 구성
+      const { grade, referral_code: adminReferralCode } = req.user;
       let whereDonation = ' WHERE 1=1';
       const paramsDonation = [];
+
+      // 일반 관리자인 경우 본인 추천 데이터만 조회하도록 강제
+      const finalReferralCode = grade === '01' ? referral_code : adminReferralCode;
+
       if (dona_yy) {
         whereDonation += ' AND d.dona_yy = ?';
         paramsDonation.push(dona_yy);
       }
-      if (referral_code) {
+      if (finalReferralCode) {
         whereDonation += ' AND r.referral_code = ?';
-        paramsDonation.push(referral_code);
+        paramsDonation.push(finalReferralCode);
       }
-      if (referral_name) {
+      if (referral_name && grade === '01') { // 수퍼관리자만 추천인명 검색 가능
         whereDonation += ' AND r.name LIKE ?';
         paramsDonation.push(`%${referral_name}%`);
       }
@@ -1553,7 +1648,12 @@ const adminController = {
   // 2. 추천인별 상세 정산 내역 (고객별)
   getSettlementDetail: async (req, res) => {
     try {
-      const { dona_yy, referral_code } = req.query;
+      const { dona_yy, referral_code: queryReferralCode } = req.query;
+      const { grade, referral_code: adminReferralCode } = req.user;
+
+      // 일반 관리자인 경우 본인 추천인 코드만 사용 가능
+      const referral_code = grade === '01' ? queryReferralCode : adminReferralCode;
+
       if (!referral_code) {
         return res.status(400).json({ message: '추천인 코드가 필요합니다.' });
       }

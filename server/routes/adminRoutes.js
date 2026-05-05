@@ -2,6 +2,14 @@ const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
 const adminContractController = require('../controllers/adminContractController');
+const auth = require('../middleware/authMiddleware');
+
+// 모든 관리자 API에 인증 미들웨어 적용
+router.use((req, res, next) => {
+  // 로그인 API는 인증 제외
+  if (req.path === '/login') return next();
+  auth(req, res, next);
+});
 
 // 대시보드 통계 API
 router.get('/stats', adminController.getDashboardStats);

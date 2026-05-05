@@ -36,12 +36,15 @@ const AdminLayout = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const menuItems = [
+  const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+  const isSuperAdmin = adminInfo.grade === '01';
+
+  const allMenuItems = [
     { name: '대시보드', path: '/admin', icon: <LayoutDashboard size={20} /> },
     {
       name: '운영 관리',
       items: [
-        { name: '관리자 계정 관리', path: '/admin/managers', icon: <Shield size={20} /> },
+        { name: '관리자 계정 관리', path: '/admin/managers', icon: <Shield size={20} />, superOnly: true },
         { name: '회원 관리', path: '/admin/users', icon: <Users size={20} /> },
         { name: '입금 관리', path: '/admin/deposits', icon: <Database size={20} /> },
         { name: '정산 관리', path: '/admin/settlement', icon: <BarChart3 size={20} /> },
@@ -51,33 +54,44 @@ const AdminLayout = ({ children }) => {
       name: '기부 관리',
       items: [
         { name: '기부 신청 관리', path: '/admin/donations', icon: <Heart size={20} /> },
-        { name: '기부금 생성 관리', path: '/admin/donations/create', icon: <Sparkles size={20} /> },
-        { name: '기부 문서 생성', path: '/admin/donations/docs', icon: <FileText size={20} /> },
-        { name: '기부 완료 처리', path: '/admin/donations/complete', icon: <CheckCircle2 size={20} /> },
-        { name: '현금영수증 처리', path: '/admin/donations/cr-receipt', icon: <Receipt size={20} /> },
-        { name: '물품공급계약서 생성', path: '/admin/donations/contract', icon: <ClipboardList size={20} /> },
+        { name: '기부금 생성 관리', path: '/admin/donations/create', icon: <Sparkles size={20} />, superOnly: true },
+        { name: '기부 문서 생성', path: '/admin/donations/docs', icon: <FileText size={20} />, superOnly: true },
+        { name: '기부 완료 처리', path: '/admin/donations/complete', icon: <CheckCircle2 size={20} />, superOnly: true },
+        { name: '현금영수증 처리', path: '/admin/donations/cr-receipt', icon: <Receipt size={20} />, superOnly: true },
+        { name: '물품공급계약서 생성', path: '/admin/donations/contract', icon: <ClipboardList size={20} />, superOnly: true },
       ]
     },
     {
       name: '물류 관리',
       items: [
-        { name: '상품 관리', path: '/admin/products', icon: <Package size={20} /> },
-        { name: '입출고 관리', path: '/admin/receipts', icon: <Truck size={20} /> },
-        { name: '재고 현황', path: '/admin/stock', icon: <BarChart3 size={20} /> },
+        { name: '상품 관리', path: '/admin/products', icon: <Package size={20} />, superOnly: true },
+        { name: '입출고 관리', path: '/admin/receipts', icon: <Truck size={20} />, superOnly: true },
+        { name: '재고 현황', path: '/admin/stock', icon: <BarChart3 size={20} />, superOnly: true },
       ]
     },
     {
       name: '시스템 설정',
       items: [
-        { name: '메시징 센터', path: '/admin/sms', icon: <MessageSquare size={20} /> },
-        { name: '기초코드 관리', path: '/admin/base-codes', icon: <Database size={20} /> },
-        { name: '입금계좌 관리', path: '/admin/bank-info', icon: <Building2 size={20} /> },
-        { name: '마감일자 관리', path: '/admin/closing-dates', icon: <Clock size={20} /> },
-        { name: '기부처 관리', path: '/admin/clients', icon: <Building size={20} /> },
+        { name: '메시징 센터', path: '/admin/sms', icon: <MessageSquare size={20} />, superOnly: true },
+        { name: '기초코드 관리', path: '/admin/base-codes', icon: <Database size={20} />, superOnly: true },
+        { name: '입금계좌 관리', path: '/admin/bank-info', icon: <Building2 size={20} />, superOnly: true },
+        { name: '마감일자 관리', path: '/admin/closing-dates', icon: <Clock size={20} />, superOnly: true },
+        { name: '기부처 관리', path: '/admin/clients', icon: <Building size={20} />, superOnly: true },
       ]
     },
     { name: '내 프로필 관리', path: '/admin/profile', icon: <UserCircle size={20} /> },
   ];
+
+  // 등급에 따른 메뉴 필터링
+  const menuItems = allMenuItems.map(group => {
+    if (group.items) {
+      const filteredItems = group.items.filter(item => isSuperAdmin || !item.superOnly);
+      if (filteredItems.length === 0) return null;
+      return { ...group, items: filteredItems };
+    }
+    if (!isSuperAdmin && group.superOnly) return null;
+    return group;
+  }).filter(Boolean);
 
   const handleLogout = () => {
     localStorage.removeItem('isAdminAuthenticated');

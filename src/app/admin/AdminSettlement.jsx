@@ -18,9 +18,14 @@ import {
   ListFilter,
   CheckCircle2
 } from 'lucide-react';
+import api from '../../lib/api';
+
 const AdminSettlement = () => {
+  const adminInfo = JSON.parse(localStorage.getItem('adminInfo') || '{}');
+  const isSuperAdmin = adminInfo.grade === '01';
+
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
-  const [selectedReferralCode, setSelectedReferralCode] = useState('');
+  const [selectedReferralCode, setSelectedReferralCode] = useState(isSuperAdmin ? '' : (adminInfo.referral_code || ''));
   const [referrals, setReferrals] = useState([]);
   const [summaryData, setSummaryData] = useState([]);
   const [selectedReferral, setSelectedReferral] = useState(null);
@@ -32,9 +37,8 @@ const AdminSettlement = () => {
   useEffect(() => {
     const fetchReferrals = async () => {
       try {
-        const response = await fetch('/api/admin/referrals');
-        const data = await response.json();
-        if (response.ok) setReferrals(data);
+        const data = await api.get('/admin/referrals');
+        setReferrals(data);
       } catch (err) {
         console.error('추천인 로드 실패:', err);
       }
@@ -59,10 +63,8 @@ const AdminSettlement = () => {
   const fetchSummary = async () => {
     setLoading(true);
     try {
-      const url = `/api/admin/settlement/summary?dona_yy=${selectedYear}&referral_code=${selectedReferralCode}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`서버 응답 오류: ${response.status}`);
-      const data = await response.json();
+      const url = `/admin/settlement/summary?dona_yy=${selectedYear}&referral_code=${selectedReferralCode}`;
+      const data = await api.get(url);
       setSummaryData(data);
       setSelectedReferral(null);
       setDetailData([]);
@@ -78,10 +80,8 @@ const AdminSettlement = () => {
     setLoading(true);
     setSelectedReferral(referral);
     try {
-      const url = `/api/admin/settlement/detail?dona_yy=${selectedYear}&referral_code=${referral.referral_code}`;
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`서버 응답 오류: ${response.status}`);
-      const data = await response.json();
+      const url = `/admin/settlement/detail?dona_yy=${selectedYear}&referral_code=${referral.referral_code}`;
+      const data = await api.get(url);
       setDetailData(data);
     } catch (error) {
       console.error('상세 데이터 조회 실패:', error);
@@ -129,17 +129,20 @@ const AdminSettlement = () => {
               </div>
             </div>
 
-            <div className="flex flex-col gap-2 min-w-[220px]">
+            <div className={`flex flex-col gap-2 min-w-[220px] ${!isSuperAdmin ? 'opacity-50 cursor-not-allowed' : ''}`}>
               <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">추천인 필터</label>
               <div className="relative group">
                 <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-blue-500 transition-colors" size={18} />
                 <select
                   value={selectedReferralCode}
-                  onChange={(e) => setSelectedReferralCode(e.target.value)}
-                  className="w-full pl-12 pr-10 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all outline-none font-bold appearance-none cursor-pointer text-slate-700"
+                  onChange={(e) => isSuperAdmin && setSelectedReferralCode(e.target.value)}
+                  disabled={!isSuperAdmin}
+                  className="w-full pl-12 pr-10 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-blue-500/20 focus:bg-white transition-all outline-none font-bold appearance-none cursor-pointer text-slate-700 disabled:cursor-not-allowed"
                 >
-                  <option value="">전체 추천인</option>
-                  {referrals.map(ref => <option key={ref.referral_code} value={ref.referral_code}>{ref.name}</option>)}
+                  {isSuperAdmin && <option value="">전체 추천인</option>}
+                  {referrals.filter(ref => isSuperAdmin || ref.referral_code === adminInfo.referral_code).map(ref => (
+                    <option key={ref.referral_code} value={ref.referral_code}>{ref.name}</option>
+                  ))}
                 </select>
               </div>
             </div>

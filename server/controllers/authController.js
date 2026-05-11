@@ -2,6 +2,27 @@ const db = require('../config/db');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const admin = require('../config/firebaseAdmin'); // Firebase Admin 추가
+const axios = require('axios');
+
+// 알리고 SMS 발송 유틸리티 함수
+const sendAligoSMS = async (receiver, message) => {
+  try {
+    const params = new URLSearchParams();
+    params.append('key', process.env.ALIGO_API_KEY);
+    params.append('userid', process.env.ALIGO_USER_ID);
+    params.append('sender', process.env.ALIGO_SENDER);
+    params.append('receiver', receiver);
+    params.append('msg', message);
+    // params.append('testmode_yn', 'Y'); // 테스트 모드 필요 시 주석 해제
+
+    const response = await axios.post('https://apis.aligo.in/send/', params);
+    console.log('📱 [Aligo Response]:', response.data);
+    return response.data;
+  } catch (error) {
+    console.error('❌ [Aligo Error]:', error.message);
+    throw error;
+  }
+};
 
 // 로그인
 exports.login = async (req, res) => {
@@ -515,21 +536,43 @@ exports.sendVerificationSMS = async (req, res) => {
     
     const msg_content = `[스마트나눔] 인증번호는 [${verificationCode}] 입니다.`;
 
-    // 3. TB_SMS_LOG 테이블에 저장
+
+    // 4. 실제 Aligo SMS 발송
+    let sendStat = 'SUCCESS';
+    let errorMsg = null;
+    
+    try {
+      const aligoResult = await sendAligoSMS(hpno, msg_content);
+      if (aligoResult.result_code !== '1') {
+        sendStat = 'FAIL';
+        errorMsg = aligoResult.message;
+      }
+    } catch (sendError) {
+      sendStat = 'FAIL';
+      errorMsg = sendError.message;
+    }
+
+    // 5. TB_SMS_LOG 테이블에 저장
     try {
       await db.execute(
-        'INSERT INTO TB_SMS_LOG (log_id, cust_no, receiver_phone, msg_content, msg_type, send_stat, send_category) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [log_id, cust_no || null, hpno, msg_content, 'SMS', 'SUCCESS', category || 'SIGN_UP']
+        'INSERT INTO TB_SMS_LOG (log_id, cust_no, receiver_phone, msg_content, msg_type, send_stat, send_category, error_msg) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [log_id, cust_no || null, hpno, msg_content, 'SMS', sendStat, category || 'SIGN_UP', errorMsg]
       );
     } catch (dbError) {
       console.error('DB 저장 중 오류 발생:', dbError);
     }
 
-    // 실제 SMS 발송 업체 연동이 없으므로, 일단 성공으로 기록하고 인증번호를 반환 (테스트용)
-    res.status(200).json({ 
-      message: `인증번호가 발송되었습니다. (테스트용: ${verificationCode})`,
-      code: verificationCode // 프런트엔드에서 테스트를 위해 반환
-    });
+    if (sendStat === 'SUCCESS') {
+      res.status(200).json({ 
+        success: true,
+        message: '인증번호가 발송되었습니다.',
+        // 보안을 위해 실제 서비스에서는 code를 반환하지 않습니다.
+        // 개발/테스트 단계에서 확인이 필요하면 아래 주석을 해제하세요.
+        // testCode: verificationCode 
+      });
+    } else {
+      res.status(500).json({ success: false, message: errorMsg || '인증번호 발송에 실패했습니다.' });
+    }
   } catch (error) {
     console.error('SMS 발송 로그 저장 에러:', error);
     res.status(500).json({ message: '인증번호 발송 중 오류가 발생했습니다.' });
@@ -590,21 +633,41 @@ exports.findIdSendSMS = async (req, res) => {
     
     const msg_content = `[스마트나눔] 아이디 찾기 인증번호는 [${verificationCode}] 입니다.`;
 
-    // 4. TB_SMS_LOG 테이블에 저장 (카테고리: FIND_ID)
+
+    // 5. 실제 Aligo SMS 발송
+    let sendStat = 'SUCCESS';
+    let errorMsg = null;
+
+    try {
+      const aligoResult = await sendAligoSMS(hpno, msg_content);
+      if (aligoResult.result_code !== '1') {
+        sendStat = 'FAIL';
+        errorMsg = aligoResult.message;
+      }
+    } catch (sendError) {
+      sendStat = 'FAIL';
+      errorMsg = sendError.message;
+    }
+
+    // 6. TB_SMS_LOG 테이블에 저장 (카테고리: FIND_ID)
     try {
       await db.execute(
-        'INSERT INTO TB_SMS_LOG (log_id, cust_no, receiver_phone, msg_content, msg_type, send_stat, send_category) VALUES (?, ?, ?, ?, ?, ?, ?)',
-        [log_id, cust_no, hpno, msg_content, 'SMS', 'SUCCESS', 'FIND_ID']
+        'INSERT INTO TB_SMS_LOG (log_id, cust_no, receiver_phone, msg_content, msg_type, send_stat, send_category, error_msg) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [log_id, cust_no, hpno, msg_content, 'SMS', sendStat, 'FIND_ID', errorMsg]
       );
     } catch (dbError) {
       console.error('DB 저장 중 오류 발생 (아이디 찾기):', dbError);
     }
 
-    // 테스트를 위해 인증번호 반환 및 메시지에 포함
-    res.status(200).json({ 
-      message: `인증번호가 발송되었습니다. (테스트용: ${verificationCode})`,
-      code: verificationCode 
-    });
+    if (sendStat === 'SUCCESS') {
+      res.status(200).json({ 
+        success: true,
+        message: '인증번호가 발송되었습니다.',
+        // verificationCode: verificationCode // 보안상 주석 처리
+      });
+    } else {
+      res.status(500).json({ success: false, message: errorMsg || '인증번호 발송에 실패했습니다.' });
+    }
   } catch (error) {
     console.error('아이디 찾기 SMS 발송 에러:', error);
     res.status(500).json({ message: '인증번호 발송 중 오류가 발생했습니다.' });
@@ -613,47 +676,56 @@ exports.findIdSendSMS = async (req, res) => {
 
 // 인증번호 확인 및 아이디 반환
 exports.verifyCodeAndFindId = async (req, res) => {
-  const { hpno, code, generatedCode } = req.body;
+  const { hpno, code } = req.body;
 
   if (!hpno || !code) {
     return res.status(400).json({ message: '정보가 누락되었습니다.' });
   }
 
   try {
-    // 인증번호 비교
-    if (code !== generatedCode) {
+    // 1. 번호 형식 정제
+    const cleanPhone = hpno.replace(/[^0-9]/g, '');
+    
+    // 2. DB에서 최근 3분 이내에 발송된 해당 번호의 최신 인증번호 조회
+    // msg_content에서 [123456] 형식을 찾아 추출함
+    const [logs] = await db.query(
+      `SELECT msg_content FROM TB_SMS_LOG 
+       WHERE receiver_phone = ? 
+       AND send_category = 'FIND_ID' 
+       AND send_stat = 'SUCCESS'
+       AND reg_date >= DATE_SUB(NOW(), INTERVAL 3 MINUTE)
+       ORDER BY reg_date DESC LIMIT 1`,
+      [cleanPhone]
+    );
+
+    if (logs.length === 0) {
+      return res.status(400).json({ message: '인증번호가 만료되었거나 요청 이력이 없습니다.' });
+    }
+
+    // 3. 메시지 내용에서 인증번호 6자리 추출 (정규표현식 사용)
+    const match = logs[0].msg_content.match(/\[(\d{6})\]/);
+    if (!match || match[1] !== code) {
       return res.status(400).json({ message: '인증번호가 일치하지 않습니다.' });
     }
 
-    // 1. 번호 형식 정제
-    let phoneNumber = hpno.replace(/-/g, '');
-    
-    // +82를 0으로 변환 (예: +8210... -> 010...)
-    if (phoneNumber.startsWith('+82')) {
-      phoneNumber = '0' + phoneNumber.slice(3);
-    }
-
-    const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
-    let searchPhones = [hpno, cleanPhone];
+    // 4. 인증 성공 시 아이디 조회
+    // 다양한 형식 지원을 위해 검색 후보군 생성
+    let searchPhones = [cleanPhone];
     if (cleanPhone.startsWith('010')) {
         searchPhones.push('+82' + cleanPhone.substring(1));
         searchPhones.push('82' + cleanPhone.substring(1));
-    } else if (cleanPhone.startsWith('8210')) {
-        searchPhones.push('0' + cleanPhone.substring(2));
-        searchPhones.push('+' + cleanPhone);
     }
     searchPhones = [...new Set(searchPhones)].filter(p => p);
 
-    // 2. 인증 성공 시 아이디 조회 (다중 형식 지원)
     const [rows] = await db.query('SELECT id FROM cust WHERE hpno IN (?)', [searchPhones]);
     if (rows.length === 0) {
-      return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
+      return res.status(404).json({ message: '인증은 성공했으나 연결된 사용자 정보를 찾을 수 없습니다.' });
     }
 
-    res.json({ id: rows[0].id });
+    res.json({ success: true, id: rows[0].id });
   } catch (error) {
     console.error('아이디 조회 에러:', error);
-    res.status(500).json({ message: '아이디 조회 중 오류가 발생했습니다.' });
+    res.status(500).json({ message: '인증 확인 중 오류가 발생했습니다.' });
   }
 };
 // Firebase SMS 발송 로그 기록

@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth } from '../../lib/firebase';
-import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 
 /**
  * 아이디 찾기 화면 컴포넌트입니다.
- * 휴대폰 번호 인증을 통해 아이디를 찾는 기능을 제공합니다.
+ * 알리고(Aligo) SMS 인증을 통해 아이디를 찾는 기능을 제공합니다.
  */
 const FindIdScreen = () => {
   const navigate = useNavigate();
@@ -16,8 +14,6 @@ const FindIdScreen = () => {
   const [showResultModal, setShowResultModal] = useState(false);
   const [foundId, setFoundId] = useState('');
   const [loading, setLoading] = useState(false);
-  const [confirmationResult, setConfirmationResult] = useState(null);
-  const recaptchaVerifier = useRef(null);
   
   // 프리미엄 모달 상태
   const [modal, setModal] = useState({
@@ -35,8 +31,8 @@ const FindIdScreen = () => {
     setModal(prev => ({ ...prev, show: false }));
   };
 
-  // 입력 필드 참조를 위한 ref 배열 (필요시)
-  const inputRefs = React.useRef([]);
+  // 입력 필드 참조를 위한 ref 배열
+  const inputRefs = useRef([]);
 
   // 타이머 로직
   useEffect(() => {
@@ -92,7 +88,7 @@ const FindIdScreen = () => {
     }
   };
 
-  // 인증번호 전송
+  // 인증번호 전송 (Aligo 방식)
   const handleSendCode = async () => {
     const rawPhoneNumber = phoneNumber.replace(/-/g, '');
     if (rawPhoneNumber.length < 10) {
@@ -100,8 +96,9 @@ const FindIdScreen = () => {
       return;
     }
 
-    if (loading) return; // 중복 클릭 방지
+    if (loading) return;
     setLoading(true);
+
     try {
       // 1. 해당 번호로 가입된 사용자가 있는지 먼저 확인
       const checkRes = await fetch('/api/auth/check-phone-exists', {
@@ -110,90 +107,43 @@ const FindIdScreen = () => {
         body: JSON.stringify({ hpno: rawPhoneNumber }),
       });
       const checkData = await checkRes.json();
+      
       if (!checkRes.ok) {
         showAlert('알림', checkData.message || '가입되지 않은 번호입니다.', 'info');
         setLoading(false);
         return;
       }
 
-      // 2. Firebase SMS 발송
-      let e164Number = '+82' + rawPhoneNumber.substring(1);
-      
-      if (recaptchaVerifier.current) {
-        try {
-          recaptchaVerifier.current.clear();
-        } catch (e) {
-          console.log('Recaptcha clear error:', e);
-        }
-        recaptchaVerifier.current = null;
-      }
-
-      const container = document.getElementById('recaptcha-container');
-      if (container) container.innerHTML = ''; // 컨테이너 비우기
-
-      recaptchaVerifier.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        'size': 'invisible'
-      });
-
-      const confirmation = await signInWithPhoneNumber(auth, e164Number, recaptchaVerifier.current);
-      setConfirmationResult(confirmation);
-      setIsCodeSent(true);
-      setTimer(180);
-      setVerificationCode(['', '', '', '', '', '']);
-
-      // DB 로그 기록 (백그라운드)
-      fetch('/api/auth/log-sms', {
+      // 2. 서버를 통해 알리고 SMS 발송 요청
+      const response = await fetch('/api/auth/find-id/send-sms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          hpno: rawPhoneNumber,
-          category: 'FIND_ID',
-          code: null // Firebase 방식
-        }),
-      }).catch(err => console.error('SMS Log Error:', err));
+        body: JSON.stringify({ hpno: rawPhoneNumber }),
+      });
 
-      showAlert('전송 완료', '인증번호가 발송되었습니다. (Firebase)', 'success');
-      
-      setTimeout(() => {
-        if (inputRefs.current[0]) inputRefs.current[0].focus();
-      }, 100);
+      const data = await response.json();
+
+      if (response.ok) {
+        setIsCodeSent(true);
+        setTimer(180); // 3분
+        setVerificationCode(['', '', '', '', '', '']);
+        showAlert('전송 완료', '인증번호가 발송되었습니다.', 'success');
+        
+        setTimeout(() => {
+          if (inputRefs.current[0]) inputRefs.current[0].focus();
+        }, 100);
+      } else {
+        showAlert('오류', data.message || '인증번호 발송에 실패했습니다.', 'error');
+      }
     } catch (error) {
       console.error('SMS 발송 오류:', error);
-      
-      let errorMsg = error.message;
-      if (error.code === 'auth/too-many-requests') {
-        errorMsg = '단기간에 너무 많은 요청이 있었습니다. 보안을 위해 잠시 차단되었으니 5~10분 후 다시 시도해 주세요.';
-      } else if (error.code === 'auth/invalid-phone-number') {
-        errorMsg = '유효하지 않은 전화번호 형식입니다.';
-      }
-
-      // 발송 실패 로그 기록
-      try {
-        await fetch('/api/auth/log-sms', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            hpno: rawPhoneNumber,
-            category: 'FIND_ID',
-            send_stat: 'FAIL',
-            error_msg: error.message
-          }),
-        });
-      } catch (logError) {
-        console.error('로그 기록 실패:', logError);
-      }
-
-      showAlert('오류', errorMsg, 'error');
-      if (recaptchaVerifier.current) {
-        recaptchaVerifier.current.clear();
-        recaptchaVerifier.current = null;
-      }
+      showAlert('오류', '서버 통신 중 오류가 발생했습니다.', 'error');
     } finally {
       setLoading(false);
     }
   };
 
-  // 아이디 확인 (인증번호 검증 및 DB 조회)
+  // 아이디 확인 (우리 서버 API 호출)
   const handleFindId = async () => {
     const codeString = verificationCode.join('');
     if (codeString.length < 6) {
@@ -201,24 +151,14 @@ const FindIdScreen = () => {
       return;
     }
 
-    if (!confirmationResult) {
-      showAlert('알림', '먼저 인증번호를 요청해주세요.', 'info');
-      return;
-    }
-
     setLoading(true);
     try {
-      // 1. Firebase 인증 확인
-      const result = await confirmationResult.confirm(codeString);
-      const idToken = await result.user.getIdToken();
-
-      // 2. 서버에서 아이디 조회
-      const response = await fetch('/api/auth/find-id/verify-firebase', {
+      const response = await fetch('/api/auth/find-id/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          idToken: idToken,
-          hpno: phoneNumber.replace(/-/g, '')
+          hpno: phoneNumber.replace(/-/g, ''),
+          code: codeString
         }),
       });
 
@@ -228,11 +168,11 @@ const FindIdScreen = () => {
         setFoundId(data.id);
         setShowResultModal(true);
       } else {
-        showAlert('오류', data.message || '아이디를 찾는 중 오류가 발생했습니다.', 'error');
+        showAlert('인증 실패', data.message || '인증번호가 일치하지 않습니다.', 'error');
       }
     } catch (error) {
       console.error('아이디 찾기 에러:', error);
-      showAlert('인증 실패', '인증번호가 일치하지 않거나 만료되었습니다.', 'error');
+      showAlert('오류', '서버 통신 중 오류가 발생했습니다.', 'error');
     } finally {
       setLoading(false);
     }
@@ -277,9 +217,9 @@ const FindIdScreen = () => {
             />
             <button 
               onClick={handleSendCode}
-              disabled={loading || (isCodeSent && timer > 0)}
+              disabled={loading || (isCodeSent && timer > 150)} // 30초 후 재전송 가능
               className={`px-4 rounded-xl font-bold text-sm transition-all whitespace-nowrap shadow-sm ${
-                (loading || (isCodeSent && timer > 0))
+                (loading || (isCodeSent && timer > 150))
                 ? 'bg-slate-100 text-slate-400 border border-slate-200' 
                 : 'bg-primary text-white active:scale-95'
               }`}
@@ -330,8 +270,6 @@ const FindIdScreen = () => {
               인증번호 전송 버튼을 눌러주세요.
             </p>
           )}
-          {/* Firebase Recaptcha Container */}
-          <div id="recaptcha-container"></div>
         </div>
       </div>
 
@@ -353,15 +291,12 @@ const FindIdScreen = () => {
       {/* 결과 알림 팝업 (모달) */}
       {showResultModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-          {/* 배경 오버레이 */}
           <div 
             className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-fade-in"
             onClick={() => setShowResultModal(false)}
           ></div>
           
-          {/* 모달 컨텐츠 */}
           <div className="relative bg-white rounded-[40px] p-8 shadow-2xl flex flex-col items-center gap-6 w-full max-w-[340px] animate-zoom-in border border-white/20">
-            {/* 아이콘 영역 */}
             <div className="relative">
               <div className="absolute inset-0 bg-primary/20 rounded-full blur-xl animate-pulse"></div>
               <div className="relative size-20 bg-gradient-to-tr from-primary to-[#6e4ff5] rounded-full flex items-center justify-center shadow-xl shadow-primary/30">
@@ -369,7 +304,6 @@ const FindIdScreen = () => {
               </div>
             </div>
 
-            {/* 텍스트 영역 */}
             <div className="text-center space-y-2">
               <h3 className="text-2xl font-black text-slate-900 tracking-tight">아이디 찾기 성공</h3>
               <p className="text-[15px] font-medium text-slate-500 leading-relaxed">
@@ -394,15 +328,12 @@ const FindIdScreen = () => {
       {/* 프리미엄 모달 UI (일반 알림용) */}
       {modal.show && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-6">
-          {/* 배경 오버레이 */}
           <div 
             className="absolute inset-0 bg-slate-900/60 backdrop-blur-md animate-fade-in"
             onClick={closeAlert}
           ></div>
           
-          {/* 모달 컨텐츠 */}
           <div className="relative bg-white rounded-[40px] p-8 shadow-2xl flex flex-col items-center gap-6 w-full max-w-[340px] animate-zoom-in border border-white/20">
-            {/* 아이콘 영역 */}
             <div className="relative">
               <div className={`absolute inset-0 rounded-full blur-xl animate-pulse ${
                 modal.type === 'success' ? 'bg-green-400/20' : 
@@ -420,7 +351,6 @@ const FindIdScreen = () => {
               </div>
             </div>
     
-            {/* 텍스트 영역 */}
             <div className="text-center space-y-2">
               <h3 className="text-2xl font-black text-slate-900 tracking-tight">{modal.title}</h3>
               <p className="text-[15px] font-medium text-slate-500 leading-relaxed whitespace-pre-wrap">

@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth } from '../../lib/firebase';
-import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 
 /**
  * 회원가입 화면 컴포넌트입니다.
- * 디자인 가이드(_3)를 기반으로 제작되었습니다.
+ * 알리고(Aligo) SMS 인증이 적용되었습니다.
  */
 const RegisterScreen = () => {
   const navigate = useNavigate();
@@ -34,9 +32,6 @@ const RegisterScreen = () => {
   const [isSmsSent, setIsSmsSent] = useState(false); // SMS 발송 여부
   const [inputCode, setInputCode] = useState(''); // 사용자가 입력한 인증번호
   const [isPhoneVerified, setIsPhoneVerified] = useState(false); // 휴대폰 인증 완료 여부
-  const [confirmationResult, setConfirmationResult] = useState(null); // Firebase 인증 결과 객체
-  const recaptchaRef = useRef(null);
-  const recaptchaVerifier = useRef(null);
 
   const showAlert = (title, message, type = 'info') => {
     setModal({ show: true, title, message, type });
@@ -97,7 +92,7 @@ const RegisterScreen = () => {
       }
     } catch (error) {
       console.error('중복 확인 에러:', error);
-      showAlert('통신 오류', '서버 접속에 실패했습니다. cPanel의 원격 MySQL 설정을 확인해주세요!', 'error');
+      showAlert('통신 오류', '서버 접속에 실패했습니다.', 'error');
     }
   };
 
@@ -185,7 +180,7 @@ const RegisterScreen = () => {
       }
     } catch (error) {
       console.error('회원가입 에러:', error);
-      showAlert('통신 오류', '서버 접속에 실패했습니다. cPanel의 원격 MySQL 설정을 확인해주세요!', 'error');
+      showAlert('통신 오류', '서버 접속에 실패했습니다.', 'error');
     } finally {
       setLoading(false);
     }
@@ -197,74 +192,33 @@ const RegisterScreen = () => {
       return;
     }
 
-    // 휴대폰 번호 정제: 모든 비숫자 제거 후 010... -> +8210... 변환
-    let cleanPhone = formData.hpno.replace(/[^0-9]/g, '');
-    if (cleanPhone.startsWith('0')) {
-      cleanPhone = '82' + cleanPhone.substring(1);
-    }
-    const phoneNumber = '+' + cleanPhone;
     if (loading) return;
+
     try {
       setLoading(true);
       
-      // Recaptcha 초기화 (중복 렌더링 방지)
-      if (recaptchaVerifier.current) {
-        try {
-          recaptchaVerifier.current.clear();
-        } catch (e) {
-          console.log('Recaptcha clear error:', e);
-        }
-        recaptchaVerifier.current = null;
-      }
-      
-      const container = document.getElementById('recaptcha-container');
-      if (container) container.innerHTML = '';
-
-      recaptchaVerifier.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        'size': 'invisible'
+      const response = await fetch('/api/auth/send-sms', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          hpno: formData.hpno,
+          category: 'SIGN_UP'
+        }),
       });
 
-      const confirmation = await signInWithPhoneNumber(auth, phoneNumber, recaptchaVerifier.current);
-      setConfirmationResult(confirmation);
-      setIsSmsSent(true);
+      const data = await response.json();
 
-      // DB 로그 기록 (백그라운드에서 실행, type -> category로 수정)
-      fetch('/api/auth/log-sms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          hpno: formData.hpno,
-          category: 'REGISTER',
-          code: null // Firebase 방식은 번호를 알 수 없음
-        }),
-      }).catch(err => console.error('SMS Log Error:', err));
-
-      showAlert('인증번호 발송', '휴대폰으로 인증번호가 발송되었습니다. (Firebase)', 'success');
+      if (response.ok && data.success) {
+        setIsSmsSent(true);
+        showAlert('인증번호 발송', '휴대폰으로 인증번호가 발송되었습니다. (알리고)', 'success');
+      } else {
+        showAlert('발송 실패', data.message || '인증번호 발송에 실패했습니다.', 'error');
+      }
     } catch (error) {
       console.error('SMS 발송 에러:', error);
-      
-      // 발송 실패 로그 저장 (백그라운드)
-      fetch('/api/auth/log-sms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          hpno: formData.hpno,
-          category: 'REGISTER',
-          send_stat: 'FAIL',
-          error_msg: error.message || 'Firebase 발송 에러'
-        }),
-      }).catch(err => console.error('SMS Fail Log Error:', err));
-
-      let errorMsg = '인증번호 발송 중 오류가 발생했습니다.';
-      if (error.code === 'auth/invalid-phone-number') errorMsg = '유효하지 않은 전화번호 형식입니다.';
-      if (error.code === 'auth/too-many-requests') errorMsg = '너무 많은 요청이 발생했습니다. 잠시 후 다시 시도해주세요.';
-      showAlert('오류', errorMsg, 'error');
-      
-      // 에러 발생 시 리캡차 초기화
-      if (recaptchaVerifier.current) {
-        recaptchaVerifier.current.clear();
-        recaptchaVerifier.current = null;
-      }
+      showAlert('오류', '인증번호 발송 중 통신 오류가 발생했습니다.', 'error');
     } finally {
       setLoading(false);
     }
@@ -276,23 +230,35 @@ const RegisterScreen = () => {
       return;
     }
 
-    if (!confirmationResult) {
+    if (!isSmsSent) {
       showAlert('알림', '먼저 인증번호를 요청해주세요.', 'info');
       return;
     }
 
     try {
       setLoading(true);
-      const result = await confirmationResult.confirm(inputCode);
-      // 인증 성공
-      showAlert('인증 성공', '휴대폰 인증이 완료되었습니다! ✅', 'success');
-      setIsPhoneVerified(true);
-      
-      // 인증된 전화번호로 고정 (수정 방지)
-      setFormData(prev => ({ ...prev, hpno: result.user.phoneNumber }));
+      const response = await fetch('/api/auth/verify-signup-code', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          hpno: formData.hpno,
+          code: inputCode
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        showAlert('인증 성공', '휴대폰 인증이 완료되었습니다! ✅', 'success');
+        setIsPhoneVerified(true);
+      } else {
+        showAlert('인증 실패', data.message || '인증번호가 일치하지 않습니다. 😢', 'error');
+      }
     } catch (error) {
       console.error('인증번호 확인 에러:', error);
-      showAlert('인증 실패', '인증번호가 일치하지 않거나 만료되었습니다. 😢', 'error');
+      showAlert('오류', '인증 확인 중 통신 오류가 발생했습니다.', 'error');
     } finally {
       setLoading(false);
     }
@@ -479,8 +445,6 @@ const RegisterScreen = () => {
                   <span className="absolute right-4 top-1/2 -translate-y-1/2 material-symbols-outlined text-green-500">check_circle</span>
                 )}
               </div>
-              {/* Firebase Recaptcha Container */}
-              <div id="recaptcha-container"></div>
             </label>
           </div>
 

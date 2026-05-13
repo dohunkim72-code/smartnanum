@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { auth } from '../../lib/firebase';
-import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 
 /**
  * 비밀번호 재설정 화면 컴포넌트입니다.
- * Firebase 휴대폰 인증을 통해 본인 확인 후 비밀번호를 직접 변경합니다.
+ * 알리고(Aligo) SMS 인증을 통해 본인 확인 후 비밀번호를 직접 변경합니다.
  */
 const ResetPasswordScreen = () => {
   const navigate = useNavigate();
@@ -16,11 +14,8 @@ const ResetPasswordScreen = () => {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [confirmationResult, setConfirmationResult] = useState(null);
   const [timer, setTimer] = useState(180); // 3분 타이머
   
-  const recaptchaWrapperRef = useRef(null);
-
   // 프리미엄 모달 상태
   const [modal, setModal] = useState({
     show: false,
@@ -68,9 +63,10 @@ const ResetPasswordScreen = () => {
     }
   };
 
-  // 1단계: 아이디 확인 및 인증번호 발송
+  // 1단계: 아이디 확인 및 인증번호 발송 (Aligo 방식)
   const handleSendCode = async () => {
-    if (!loginId || phoneNumber.replace(/-/g, '').length < 10) {
+    const cleanPhone = phoneNumber.replace(/-/g, '');
+    if (!loginId || cleanPhone.length < 10) {
       showAlert('알림', '아이디와 휴대폰 번호를 정확히 입력해주세요.', 'info');
       return;
     }
@@ -82,7 +78,7 @@ const ResetPasswordScreen = () => {
       const checkRes = await fetch('/api/auth/check-user-exists', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: loginId, hpno: phoneNumber.replace(/-/g, '') })
+        body: JSON.stringify({ id: loginId, hpno: cleanPhone })
       });
       const checkData = await checkRes.json();
 
@@ -92,43 +88,25 @@ const ResetPasswordScreen = () => {
         return;
       }
 
-      // 2. Firebase Recaptcha 설정
-      if (window.recaptchaVerifier) {
-        try {
-          window.recaptchaVerifier.clear();
-        } catch (e) {
-          console.log('Recaptcha clear error:', e);
-        }
-        window.recaptchaVerifier = null;
-      }
-
-      const container = document.getElementById('recaptcha-container');
-      if (container) container.innerHTML = '';
-
-      window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-        size: 'invisible',
-      });
-
-      // 3. 인증번호 발송
-      const formattedPhone = `+82${phoneNumber.replace(/-/g, '').substring(1)}`;
-      const result = await signInWithPhoneNumber(auth, formattedPhone, window.recaptchaVerifier);
-      
-      setConfirmationResult(result);
-      setStep(2);
-      setTimer(180);
-      showAlert('발송 완료', '인증번호가 SMS로 발송되었습니다.', 'success');
-      
-      // 로그 기록 (우리 서버에도 남김)
-      await fetch('/api/auth/log-sms', {
+      // 2. 서버를 통해 알리고 SMS 발송 요청
+      const response = await fetch('/api/auth/send-sms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          hpno: phoneNumber.replace(/-/g, ''), 
-          category: 'RESET_PW',
-          cust_no: checkData.cust_no,
-          send_stat: 'SUCCESS'
+          hpno: cleanPhone, 
+          category: 'RESET_PW' 
         })
       });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setStep(2);
+        setTimer(180);
+        showAlert('발송 완료', '인증번호가 SMS로 발송되었습니다.', 'success');
+      } else {
+        showAlert('오류', data.message || '인증번호 발송에 실패했습니다.', 'error');
+      }
 
     } catch (error) {
       console.error('인증번호 발송 에러:', error);
@@ -138,7 +116,7 @@ const ResetPasswordScreen = () => {
     }
   };
 
-  // 2단계: 인증번호 확인
+  // 2단계: 인증번호 확인 (서버 검증 방식)
   const handleVerifyCode = async () => {
     if (verificationCode.length !== 6) {
       showAlert('알림', '6자리 인증번호를 입력해주세요.', 'info');
@@ -147,12 +125,26 @@ const ResetPasswordScreen = () => {
 
     setLoading(true);
     try {
-      await confirmationResult.confirm(verificationCode);
-      setStep(3);
-      showAlert('인증 성공', '본인 인증이 완료되었습니다. 새 비밀번호를 설정해주세요.', 'success');
+      const response = await fetch('/api/auth/verify-reset-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          hpno: phoneNumber.replace(/-/g, ''),
+          code: verificationCode
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        setStep(3);
+        showAlert('인증 성공', '본인 인증이 완료되었습니다. 새 비밀번호를 설정해주세요.', 'success');
+      } else {
+        showAlert('인증 실패', data.message || '인증번호가 올바르지 않거나 만료되었습니다.', 'error');
+      }
     } catch (error) {
       console.error('인증번호 확인 에러:', error);
-      showAlert('인증 실패', '인증번호가 올바르지 않거나 만료되었습니다.', 'error');
+      showAlert('오류', '인증 확인 중 서버 통신 오류가 발생했습니다.', 'error');
     } finally {
       setLoading(false);
     }
@@ -197,7 +189,6 @@ const ResetPasswordScreen = () => {
 
   return (
     <div className="bg-background-light min-h-screen flex flex-col max-w-[480px] mx-auto overflow-x-hidden font-display relative">
-      <div id="recaptcha-container"></div>
       
       {/* 상단 뒤로가기 버튼 */}
       <div className="flex items-center bg-transparent p-4">

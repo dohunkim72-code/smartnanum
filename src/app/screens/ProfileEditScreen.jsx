@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import BottomNav from '../components/BottomNav';
-import { auth } from '../../lib/firebase';
-import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth';
 
 /**
  * 회원정보 수정 화면 컴포넌트입니다.
- * Firebase Phone Auth를 사용하여 실제 SMS 인증을 지원합니다. ✨
+ * 알리고 SMS API를 사용하여 실제 SMS 인증을 지원합니다. ✨
  */
 const ProfileEditScreen = () => {
   const navigate = useNavigate();
@@ -20,10 +18,7 @@ const ProfileEditScreen = () => {
   const [timer, setTimer] = useState(180); // 3분
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [isVerified, setIsVerified] = useState(false);
-  const [confirmationResult, setConfirmationResult] = useState(null);
   const [loading, setLoading] = useState(false);
-
-  const recaptchaVerifier = useRef(null);
 
   // 모달 상태 관리
   const [modalState, setModalState] = useState({
@@ -81,25 +76,8 @@ const ProfileEditScreen = () => {
     }
   };
 
-  const setupRecaptcha = () => {
-    if (recaptchaVerifier.current) {
-      try {
-        recaptchaVerifier.current.clear();
-      } catch (e) {
-        console.log('Recaptcha clear error:', e);
-      }
-      recaptchaVerifier.current = null;
-    }
 
-    const container = document.getElementById('recaptcha-container-profile');
-    if (container) container.innerHTML = '';
-
-    recaptchaVerifier.current = new RecaptchaVerifier(auth, 'recaptcha-container-profile', {
-      'size': 'invisible'
-    });
-  };
-
-  // Firebase SMS 인증번호 발송 요청
+  // 알리고 SMS 인증번호 발송 요청
   const handleSendSMS = async () => {
     if (!phone) {
       showModal('입력 오류', '휴대폰 번호를 입력해주세요! 📱', true);
@@ -109,62 +87,31 @@ const ProfileEditScreen = () => {
     if (loading) return;
     try {
       setLoading(true);
-      setupRecaptcha();
-      const appVerifier = recaptchaVerifier.current;
       
-      // 휴대폰 번호 정제: 모든 비숫자 제거 후 010... -> +8210... 변환
-      let cleanPhone = phone.replace(/[^0-9]/g, '');
-      if (cleanPhone.startsWith('0')) {
-        cleanPhone = '82' + cleanPhone.substring(1);
-      }
-      const formattedPhone = '+' + cleanPhone;
-
-      console.log('Sending SMS to:', formattedPhone); // 디버깅용
-
-      const confirmation = await signInWithPhoneNumber(auth, formattedPhone, appVerifier);
-      setConfirmationResult(confirmation);
-      setIsVerifying(true);
-      setIsVerified(false);
-      setTimer(180);
-      setOtp(['', '', '', '', '', '']);
-
-      // DB 로그 기록 (백그라운드에서 실행, type -> category로 수정)
-      fetch('/api/auth/log-sms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          hpno: phone, // 원래 입력한 번호 저장
-          category: 'PROFILE_EDIT', // category 키 사용
-          cust_no: user.cust_no,
-          code: null // Firebase 방식은 번호를 알 수 없음
-        }),
-      }).catch(err => console.error('SMS Log Error:', err));
-
-      showModal('인증번호 발송', '인증번호가 발송되었습니다. (Firebase) ✉️');
-    } catch (error) {
-      console.error('SMS 발송 오류:', error);
-      
-      let errorMsg = error.message;
-      if (error.code === 'auth/too-many-requests') {
-        errorMsg = '단기간에 너무 많은 요청이 있었습니다. 보안을 위해 잠시 차단되었으니 5~10분 후 다시 시도해 주세요.';
-      } else if (error.code === 'auth/invalid-phone-number') {
-        errorMsg = '유효하지 않은 전화번호 형식입니다.';
-      }
-
-      // 발송 실패 로그 저장 (백그라운드)
-      fetch('/api/auth/log-sms', {
+      const response = await fetch('/api/auth/send-sms', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           hpno: phone,
           category: 'PROFILE_EDIT',
-          cust_no: user.cust_no,
-          send_stat: 'FAIL',
-          error_msg: error.message || 'Firebase 발송 에러'
+          cust_no: user.cust_no
         }),
-      }).catch(err => console.error('SMS Fail Log Error:', err));
+      });
 
-      showModal('발송 실패', '인증번호 발송 중 오류가 발생했습니다. ' + error.message, true);
+      const data = await response.json();
+
+      if (response.ok) {
+        setIsVerifying(true);
+        setIsVerified(false);
+        setTimer(180);
+        setOtp(['', '', '', '', '', '']);
+        showModal('인증번호 발송', '인증번호가 발송되었습니다. ✉️');
+      } else {
+        showModal('발송 실패', data.message || '인증번호 발송 중 오류가 발생했습니다.', true);
+      }
+    } catch (error) {
+      console.error('SMS 발송 오류:', error);
+      showModal('발송 실패', '네트워크 오류가 발생했습니다.', true);
     } finally {
       setLoading(false);
     }
@@ -179,13 +126,24 @@ const ProfileEditScreen = () => {
     }
 
     try {
-      await confirmationResult.confirm(enteredOtp);
-      setIsVerified(true);
-      setIsVerifying(false);
-      showModal('인증 성공', '휴대폰 인증이 완료되었습니다! ✅');
+      const response = await fetch('/api/auth/verify-profile-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hpno: phone, code: enteredOtp }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setIsVerified(true);
+        setIsVerifying(false);
+        showModal('인증 성공', '휴대폰 인증이 완료되었습니다! ✅');
+      } else {
+        showModal('인증 실패', data.message || '인증번호가 올바르지 않습니다.', true);
+      }
     } catch (error) {
       console.error('인증 실패:', error);
-      showModal('인증 실패', '인증번호가 올바르지 않습니다.', true);
+      showModal('인증 실패', '네트워크 오류가 발생했습니다.', true);
     }
   };
 
@@ -237,7 +195,6 @@ const ProfileEditScreen = () => {
 
   return (
     <div className="bg-background-light min-h-screen flex flex-col max-w-[480px] mx-auto overflow-x-hidden pb-32 font-display">
-      <div id="recaptcha-container-profile"></div>
 
       {/* 상단 헤더 */}
       <header className="sticky top-0 z-50 bg-background-light/80 backdrop-blur-md p-4 flex items-center justify-between">

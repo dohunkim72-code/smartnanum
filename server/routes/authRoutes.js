@@ -30,6 +30,15 @@ router.post('/send-pw-kakao', authController.sendPwKakao);
 // /api/auth/send-sms (인증번호 발송 및 로그 저장)
 router.post('/send-sms', authController.sendVerificationSMS);
 
+// /api/auth/verify-signup-code (회원가입 인증번호 확인)
+router.post('/verify-signup-code', authController.verifySignupCode);
+
+// /api/auth/verify-reset-code (비밀번호 재설정 인증번호 확인)
+router.post('/verify-reset-code', authController.verifyResetPasswordCode);
+
+// /api/auth/verify-profile-code (회원정보 수정 인증번호 확인)
+router.post('/verify-profile-code', authController.verifyProfileCode);
+
 // /api/auth/find-id/send-sms (아이디 찾기용 인증번호 발송)
 router.post('/find-id/send-sms', authController.findIdSendSMS);
 

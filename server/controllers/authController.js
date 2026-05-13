@@ -874,3 +874,120 @@ exports.checkReferralCode = async (req, res) => {
     res.status(500).json({ message: '서버 에러가 발생했습니다.' });
   }
 };
+
+// 회원가입용 인증번호 확인
+exports.verifySignupCode = async (req, res) => {
+  const { hpno, code } = req.body;
+
+  if (!hpno || !code) {
+    return res.status(400).json({ message: '휴대폰 번호와 인증번호를 모두 입력해주세요.' });
+  }
+
+  try {
+    // 1. 번호 형식 정제
+    const cleanPhone = hpno.replace(/[^0-9]/g, '');
+    
+    // 2. DB에서 최근 3분 이내에 발송된 해당 번호의 최신 인증번호 조회 (카테고리: SIGN_UP)
+    const [logs] = await db.query(
+      `SELECT msg_content FROM TB_SMS_LOG 
+       WHERE receiver_phone = ? 
+       AND send_category = 'SIGN_UP' 
+       AND send_stat = 'SUCCESS'
+       AND reg_date >= DATE_SUB(NOW(), INTERVAL 3 MINUTE)
+       ORDER BY reg_date DESC LIMIT 1`,
+      [cleanPhone]
+    );
+
+    if (logs.length === 0) {
+      return res.status(400).json({ message: '인증번호가 만료되었거나 요청 이력이 없습니다.' });
+    }
+
+    // 3. 메시지 내용에서 인증번호 6자리 추출
+    const match = logs[0].msg_content.match(/\[(\d{6})\]/);
+    if (!match || match[1] !== code) {
+      return res.status(400).json({ message: '인증번호가 일치하지 않습니다.' });
+    }
+
+    res.json({ success: true, message: '인증에 성공했습니다.' });
+  } catch (error) {
+    console.error('회원가입 인증 확인 에러:', error);
+    res.status(500).json({ message: '인증 확인 중 오류가 발생했습니다.' });
+  }
+};
+
+// 비밀번호 재설정용 인증번호 확인
+exports.verifyResetPasswordCode = async (req, res) => {
+  const { hpno, code } = req.body;
+
+  if (!hpno || !code) {
+    return res.status(400).json({ message: '휴대폰 번호와 인증번호를 모두 입력해주세요.' });
+  }
+
+  try {
+    const cleanPhone = hpno.replace(/[^0-9]/g, '');
+    
+    // DB에서 최근 3분 이내에 발송된 해당 번호의 최신 인증번호 조회 (카테고리: RESET_PW)
+    const [logs] = await db.query(
+      `SELECT msg_content FROM TB_SMS_LOG 
+       WHERE receiver_phone = ? 
+       AND send_category = 'RESET_PW' 
+       AND send_stat = 'SUCCESS'
+       AND reg_date >= DATE_SUB(NOW(), INTERVAL 3 MINUTE)
+       ORDER BY reg_date DESC LIMIT 1`,
+      [cleanPhone]
+    );
+
+    if (logs.length === 0) {
+      return res.status(400).json({ message: '인증번호가 만료되었거나 요청 이력이 없습니다.' });
+    }
+
+    // 메시지 내용에서 [123456] 형태의 인증번호 추출
+    const match = logs[0].msg_content.match(/\[(\d{6})\]/);
+    if (!match || match[1] !== code) {
+      return res.status(400).json({ message: '인증번호가 일치하지 않습니다.' });
+    }
+
+    res.json({ success: true, message: '인증에 성공했습니다.' });
+  } catch (error) {
+    console.error('비밀번호 재설정 인증 확인 에러:', error);
+    res.status(500).json({ message: '인증 확인 중 오류가 발생했습니다.' });
+  }
+};
+
+// 회원정보 수정용 인증번호 확인
+exports.verifyProfileCode = async (req, res) => {
+  const { hpno, code } = req.body;
+
+  if (!hpno || !code) {
+    return res.status(400).json({ message: '휴대폰 번호와 인증번호를 모두 입력해주세요.' });
+  }
+
+  try {
+    const cleanPhone = hpno.replace(/[^0-9]/g, '');
+    
+    // DB에서 최근 3분 이내에 발송된 해당 번호의 최신 인증번호 조회 (카테고리: PROFILE_EDIT)
+    const [logs] = await db.query(
+      `SELECT msg_content FROM TB_SMS_LOG 
+       WHERE receiver_phone = ? 
+       AND send_category = 'PROFILE_EDIT' 
+       AND send_stat = 'SUCCESS'
+       AND reg_date >= DATE_SUB(NOW(), INTERVAL 3 MINUTE)
+       ORDER BY reg_date DESC LIMIT 1`,
+      [cleanPhone]
+    );
+
+    if (logs.length === 0) {
+      return res.status(400).json({ message: '인증번호가 만료되었거나 요청 이력이 없습니다.' });
+    }
+
+    const match = logs[0].msg_content.match(/\[(\d{6})\]/);
+    if (!match || match[1] !== code) {
+      return res.status(400).json({ message: '인증번호가 일치하지 않습니다.' });
+    }
+
+    res.json({ success: true, message: '인증에 성공했습니다.' });
+  } catch (error) {
+    console.error('프로필 수정 인증 확인 에러:', error);
+    res.status(500).json({ message: '인증 확인 중 오류가 발생했습니다.' });
+  }
+};

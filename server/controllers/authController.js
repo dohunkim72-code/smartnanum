@@ -861,7 +861,7 @@ exports.checkReferralCode = async (req, res) => {
       return res.status(200).json({ 
         isValid: true, 
         name: rows[0].name,
-        message: `확인되었습니다. (${rows[0].name} 추천인)` 
+        message: '확인되었습니다.' 
       });
     } else {
       return res.status(200).json({ 

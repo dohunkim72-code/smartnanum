@@ -17,11 +17,62 @@
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
+      // HTTPS 강제 리다이렉트 (localhost 제외) ✨
+      if (location.protocol === 'http:' && !['localhost', '127.0.0.1'].includes(location.hostname)) {
+        location.replace(`https://${location.hostname}${location.search}${location.hash}`);
+      }
+
+      // ?update=true 쿼리 스트링이 있으면 서비스 워커와 캐시를 삭제하고 새로고침합니다. ✨
+      if (window.location.search.includes('update=true')) {
+        console.log('🔄 업데이트 요청 감지: 캐시 및 서비스 워커 초기화 중...');
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for(let registration of registrations) {
+              registration.unregister();
+            }
+            if (window.caches) {
+              caches.keys().then(function(names) {
+                for (let name of names) caches.delete(name);
+                window.location.href = window.location.origin;
+              });
+            } else {
+              window.location.href = window.location.origin;
+            }
+          });
+        } else {
+          window.location.href = window.location.origin;
+        }
+      }
+
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
-            .then(reg => console.log('Service Worker 등록 완료!', reg))
+            .then(reg => {
+              console.log('Service Worker 등록 완료!', reg);
+              
+              // 새 서비스 워커가 설치되었을 때 감지
+              reg.onupdatefound = () => {
+                const installingWorker = reg.installing;
+                installingWorker.onstatechange = () => {
+                  if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    console.log('✨ 새로운 업데이트가 준비되었습니다. 새로고침을 통해 반영합니다.');
+                    // 선택사항: 사용자에게 알림을 띄우거나 자동으로 새로고침
+                    // window.location.reload(); 
+                  }
+                };
+              };
+            })
             .catch(err => console.log('Service Worker 등록 실패:', err));
+        });
+
+        // 서비스 워커 제어권이 변경되었을 때 (즉, 새 SW가 활성화되었을 때) 새로고침
+        let refreshing = false;
+        navigator.serviceWorker.addEventListener('controllerchange', () => {
+          if (!refreshing) {
+            refreshing = true;
+            console.log('🔄 새 버전 활성화됨: 자동 새로고침 중...');
+            window.location.reload();
+          }
         });
       }
     </script>

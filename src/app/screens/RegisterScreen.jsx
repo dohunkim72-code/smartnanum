@@ -115,12 +115,9 @@ const RegisterScreen = () => {
 
       if (response.ok) {
         if (data.isValid) {
-          showAlert('확인 완료', data.message || '유효한 추천인 코드입니다! ✅', 'success');
+          showAlert('확인 완료', '확인되었습니다. ✅', 'success');
           setIsReferralChecked(true);
-          // 소개자 성명이 비어있으면 자동으로 채워줌
-          if (!formData.note && data.name) {
-            setFormData(prev => ({ ...prev, note: data.name }));
-          }
+          // 소개자 성명은 고객이 직접 입력하도록 공백 유지 (기존 자동 입력 로직 제거)
         } else {
           showAlert('확인 실패', data.message || '유효하지 않은 추천인 코드입니다. 😢', 'error');
           setIsReferralChecked(false);

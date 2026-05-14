@@ -80,8 +80,8 @@ const DonationScreen = () => {
           isCurrentYear: data.isCurrentYear
         });
 
-        if (data.isClosed) setIsClosed(true);
-        if (data.hasUnpaid) setHasUnpaid(true);
+        setIsClosed(!!data.isClosed);
+        setHasUnpaid(!!data.hasUnpaid);
 
         setFormData(prev => {
           const user = data.user || {};
@@ -283,6 +283,25 @@ const DonationScreen = () => {
       showAlert('알림', '기부 금액을 입력해 주세요! 💰', 'info');
       return;
     }
+
+    // --- 기부금 최소 금액 검증 (1,000만원 이상) ---
+    const currentAmount = parseInt(formData.amount.replace(/,/g, '')) || 0;
+    const existingTotal = initData.master ? initData.master.total_dona_amt : 0;
+    let projectedTotal = existingTotal + currentAmount;
+    
+    // 수정 모드일 경우 기존 금액을 차감하고 계산
+    if (formData.seq_no) {
+      const oldItem = initData.details.find(d => d.seq_no === formData.seq_no);
+      const oldAmount = oldItem ? oldItem.dona_amt : 0;
+      projectedTotal = existingTotal - oldAmount + currentAmount;
+    }
+
+    if (projectedTotal < 10000000) {
+      showAlert('알림', '해당 년도 총 기부 합계 금액은 1,000만원 이상이어야 합니다. 💰', 'info');
+      return;
+    }
+    // ------------------------------------------
+
     if (!formData.termsAgreed) {
       showAlert('알림', '약관 내용보기를 클릭하여 전체 동의를 완료해 주세요! 📋', 'info');
       return;
@@ -599,6 +618,10 @@ const DonationScreen = () => {
             유의사항
           </h5>
           <ul className="flex flex-col gap-4">
+            <li className="text-[16px] text-primary leading-relaxed flex gap-2 font-black">
+              <span className="material-symbols-outlined text-[18px]">warning</span>
+              <span>해당 년도 총 기부 합계 금액은 최소 1,000만원 이상이어야 합니다.</span>
+            </li>
             <li className="text-[16px] text-slate-600 leading-relaxed flex gap-2">
               <span className="text-primary font-bold">•</span>
               <span>타 기부금이 있으신 경우 기부신청시 기부금액 만큼 제외 후 신청해 주세요.</span>

@@ -23,8 +23,12 @@ exports.getInitData = async (req, res) => {
     // 마감 여부 체크
     let isClosed = false;
     if (endDateInfo.length > 0 && endDateInfo[0].end_date) {
-      const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '.');
-      if (todayStr > endDateInfo[0].end_date) {
+      // 오늘 날짜 (YYYY-MM-DD) - DB 데이터와 형식을 맞추기 위해 replace 제거 또는 일관된 형식으로 변환
+      const todayStr = new Date().toISOString().slice(0, 10); 
+      const end_date = endDateInfo[0].end_date;
+      
+      // 하이픈, 점 등 구분자를 제거하고 숫자만 비교하여 정확성 확보
+      if (todayStr.replace(/\D/g, '') > end_date.replace(/\D/g, '')) {
         isClosed = true;
       }
     }
@@ -126,12 +130,15 @@ exports.applyDonation = async (req, res) => {
 
     // 1. 마감일 체크
     const [endDateInfo] = await connection.execute('SELECT endDate AS end_date FROM endDate WHERE dona_yy = ?', [currentYear]);
-    if (endDateInfo.length > 0) {
-      const todayStr = new Date().toISOString().slice(0, 10).replace(/-/g, '.');
-      if (todayStr > endDateInfo[0].end_date) {
-        console.warn('신청 마감됨:', endDateInfo[0].end_date);
+    if (endDateInfo.length > 0 && endDateInfo[0].end_date) {
+      const todayStr = new Date().toISOString().slice(0, 10);
+      const end_date = endDateInfo[0].end_date;
+      
+      // 숫자만 추출하여 비교 (YYYYMMDD 형식)
+      if (todayStr.replace(/\D/g, '') > end_date.replace(/\D/g, '')) {
+        console.warn('신청 마감됨:', end_date);
         await connection.rollback();
-        return res.status(400).json({ message: `신청 기간이 마감되었습니다. (${endDateInfo[0].end_date}까지)` });
+        return res.status(400).json({ message: `신청 기간이 마감되었습니다. (${end_date}까지)` });
       }
     }
 
@@ -144,6 +151,30 @@ exports.applyDonation = async (req, res) => {
       console.warn('미납 내역 존재:', cust_no);
       await connection.rollback();
       return res.status(400).json({ message: '이전 연도 기부금의 입금이 완료 되어야 신청이 가능 합니다.' });
+    }
+
+    // 3. 합계 금액 체크 (1,000만원 이상)
+    const [masterRows] = await connection.execute(
+      'SELECT total_dona_amt FROM donation_master WHERE cust_no = ? AND dona_yy = ?',
+      [cust_no, currentYear]
+    );
+    const existingTotal = masterRows.length > 0 ? masterRows[0].total_dona_amt : 0;
+    
+    let projectedTotal = existingTotal + cleanAmount;
+    if (seq_no) {
+      const [existingDetail] = await connection.execute(
+        'SELECT dona_amt FROM donation_detail WHERE cust_no = ? AND dona_yy = ? AND seq_no = ?',
+        [cust_no, currentYear, seq_no]
+      );
+      if (existingDetail.length > 0) {
+        projectedTotal = existingTotal - existingDetail[0].dona_amt + cleanAmount;
+      }
+    }
+
+    if (projectedTotal < 10000000) {
+      console.warn('총 합계 금액 미달 (1,000만원 미만):', projectedTotal);
+      await connection.rollback();
+      return res.status(400).json({ message: '해당 년도 총 기부 합계 금액은 1,000만원 이상이어야 합니다.' });
     }
 
     if (seq_no) {

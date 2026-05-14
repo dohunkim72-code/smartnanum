@@ -49,6 +49,49 @@ const TaxGuideScreen = () => {
             </div>
           </div>
         </div>
+        
+        {/* 환급 예시 표 섹션 ✨ */}
+        <section className="px-6 pb-12">
+          <div className="flex items-center gap-2 mb-4 px-1">
+            <span className="material-symbols-outlined text-primary">analytics</span>
+            <h4 className="text-base font-bold text-slate-800">연봉별 환급 및 물품대금 예시</h4>
+          </div>
+          
+          <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px] text-left border-collapse">
+                <thead className="bg-slate-50 text-slate-500 font-bold border-b border-slate-100">
+                  <tr>
+                    <th className="px-3 py-4 text-center whitespace-nowrap">년 근로소득금액</th>
+                    <th className="px-3 py-4 text-center whitespace-nowrap">기부금 한도</th>
+                    <th className="px-3 py-4 text-center whitespace-nowrap">예상환급금</th>
+                    <th className="px-3 py-4 text-center whitespace-nowrap">물품대금</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {[
+                    { income: '34,000,000', limit: '10,200,000', refund: '1,560,000', payment: '826,800' },
+                    { income: '50,000,000', limit: '15,000,000', refund: '3,000,000', payment: '1,590,000' },
+                    { income: '70,000,000', limit: '21,000,000', refund: '4,800,000', payment: '2,544,000' },
+                    { income: '100,000,000', limit: '30,000,000', refund: '7,500,000', payment: '3,975,000' },
+                    { income: '150,000,000', limit: '45,000,000', refund: '12,000,000', payment: '6,360,000' },
+                    { income: '200,000,000', limit: '60,000,000', refund: '16,500,000', payment: '8,745,000' },
+                  ].map((row, idx) => (
+                    <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-3 py-4 text-right font-medium text-slate-600">{row.income}</td>
+                      <td className="px-3 py-4 text-right font-medium text-slate-600">{row.limit}</td>
+                      <td className="px-3 py-4 text-right font-black text-primary">{row.refund}</td>
+                      <td className="px-3 py-4 text-right font-black text-slate-900">{row.payment}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="mt-3 px-2 text-[11px] text-slate-400 font-medium leading-tight">
+            * 위 표는 이해를 돕기 위한 예시이며, 실제 환급액은 개인별 소득 및 공제 항목(부양가족 등)에 따라 홈택스 최종 결정 시 차이가 발생할 수 있습니다.
+          </p>
+        </section>
       </main>
 
       {/* 하단 네비게이션 */}

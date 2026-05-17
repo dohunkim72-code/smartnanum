@@ -1086,7 +1086,7 @@ const adminController = {
           receipt_yn, step_code, reg_id, upd_id, reg_date, upd_date, issuance_yn, goods_yn,
           agree1, agree2, agree3, agree4, agree5, agree6, agree7, agree8, agree9, agree10, agree11, agree12, agree13,
           signature
-        ) VALUES (?, ?, ?, 'C0001', ?, 0, ?, ?, ?, ?, ?, NOW(), NOW(), 'N', 'N',
+        ) VALUES (?, ?, ?, '', ?, 0, ?, ?, ?, ?, ?, NOW(), NOW(), 'N', 'N',
           ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           cust_no, dona_yy, nextSeq, dona_amt || 0, company_name || '', receipt_yn, step_code || '01', reg_id, reg_id,

@@ -211,7 +211,7 @@ exports.applyDonation = async (req, res) => {
           signature = ?
         WHERE cust_no = ? AND dona_yy = ? AND seq_no = ?
       `, [
-        cleanAmount, company || '기부처 미지정', receipt_yn, userId,
+        cleanAmount, company || '', receipt_yn, userId,
         agree1 || 'N', agree2 || 'N', agree3 || 'N', agree4 || 'N', agree5 || 'N', agree6 || 'N', agree7 || 'N',
         agree8 || 'N', agree9 || 'N', agree10 || 'N', agree11 || 'N', agree12 || 'N', agree13 || 'N',
         signatureFileName,
@@ -275,9 +275,9 @@ exports.applyDonation = async (req, res) => {
           reg_id, upd_id, reg_date, upd_date, issuance_yn, goods_yn, 
           agree1, agree2, agree3, agree4, agree5, agree6, agree7, agree8, agree9, agree10, agree11, agree12, agree13,
           signature
-        ) VALUES (?, ?, ?, 'C0001', ?, ?, ?, '01', ?, ?, NOW(), NOW(), 'N', 'N', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, '', ?, ?, ?, '01', ?, ?, NOW(), NOW(), 'N', 'N', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
-        cust_no, currentYear, nextSeq, cleanAmount, company || '기부처 미지정', receipt_yn, userId, userId,
+        cust_no, currentYear, nextSeq, cleanAmount, company || '', receipt_yn, userId, userId,
         agree1 || 'N', agree2 || 'N', agree3 || 'N', agree4 || 'N', agree5 || 'N', agree6 || 'N', agree7 || 'N',
         agree8 || 'N', agree9 || 'N', agree10 || 'N', agree11 || 'N', agree12 || 'N', agree13 || 'N',
         signatureFileName

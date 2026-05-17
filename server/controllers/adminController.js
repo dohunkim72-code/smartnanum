@@ -6,6 +6,7 @@ const ExcelJS = require('exceljs');
 const dayjs = require('dayjs');
 const axios = require('axios');
 const numberToKorean = require('../utils/numberToKorean');
+const { saveSignatureImage } = require('../utils/fileHelper');
 
 // 엑셀 셀 값 설정을 위한 헬퍼 함수 (병합된 셀 대응)
 function setValueToMergedStartCell(ws, cellRef, value) {
@@ -1072,7 +1073,13 @@ const adminController = {
       );
       const nextSeq = seqResult[0].next_seq;
 
-      // 3. 상세 내역 등록
+      // 3. 서명 파일 저장 처리
+      let signatureFileName = null;
+      if (signature) {
+        signatureFileName = await saveSignatureImage(signature, cust_no, dona_yy, nextSeq);
+      }
+
+      // 4. 상세 내역 등록
       await connection.execute(
         `INSERT INTO donation_detail (
           cust_no, dona_yy, seq_no, client_no, dona_amt, real_amt, company_name, 
@@ -1085,7 +1092,7 @@ const adminController = {
           cust_no, dona_yy, nextSeq, dona_amt || 0, company_name || '', receipt_yn, step_code || '01', reg_id, reg_id,
           agree1 || 'N', agree2 || 'N', agree3 || 'N', agree4 || 'N', agree5 || 'N', agree6 || 'N', agree7 || 'N',
           agree8 || 'N', agree9 || 'N', agree10 || 'N', agree11 || 'N', agree12 || 'N', agree13 || 'N',
-          signature || null
+          signatureFileName || null
         ]
       );
 
@@ -1186,6 +1193,12 @@ const adminController = {
           await connection.rollback();
           return res.status(400).json({ message: '상세 수정을 위해서는 seq_no가 필요합니다.' });
         }
+
+        // 서명 이미지 파일 저장 처리
+        let signatureFileName = null;
+        if (signature) {
+          signatureFileName = await saveSignatureImage(signature, cust_no, dona_yy, seq_no);
+        }
         
         await connection.execute(
           `UPDATE donation_detail SET 
@@ -1196,7 +1209,7 @@ const adminController = {
           [
             dona_amt, real_amt, step_code, company_name, receipt_yn, 
             agree1, agree2, agree3, agree4, agree5, agree6, agree7, agree8, agree9, agree10, agree11, agree12, agree13,
-            signature, upd_id, cust_no, dona_yy, seq_no
+            signatureFileName, upd_id, cust_no, dona_yy, seq_no
           ]
         );
 
@@ -1884,12 +1897,25 @@ const adminController = {
           // DB에 저장된 signature (Base64)를 파일로 임시 저장하거나 직접 삽입 가능
           if (donation.signature) {
             try {
-              const base64Data = donation.signature.replace(/^data:image\/\w+;base64,/, "");
-              const buffer = Buffer.from(base64Data, 'base64');
-              const imageId = workbook.addImage({ buffer, extension: 'png' });
-              if (sheet1) sheet1.addImage(imageId, { tl: { col: 5.5, row: 21.2 }, ext: { width: 160, height: 50 } });
-              if (sheet2) sheet2.addImage(imageId, { tl: { col: 2.5, row: 23.2 }, ext: { width: 160, height: 50 } });
-              if (sheet3) sheet3.addImage(imageId, { tl: { col: 5.5, row: 21.2 }, ext: { width: 160, height: 50 } });
+              let buffer = null;
+              if (donation.signature.startsWith('data:image') || donation.signature.includes('base64')) {
+                const base64Data = donation.signature.replace(/^data:image\/\w+;base64,/, "");
+                buffer = Buffer.from(base64Data, 'base64');
+              } else {
+                const sigFilePath = path.join(__dirname, '../../signatures', donation.signature);
+                if (fs.existsSync(sigFilePath)) {
+                  buffer = fs.readFileSync(sigFilePath);
+                } else {
+                  console.warn(`[서명 파일 미존재]: ${sigFilePath}`);
+                }
+              }
+
+              if (buffer) {
+                const imageId = workbook.addImage({ buffer, extension: 'png' });
+                if (sheet1) sheet1.addImage(imageId, { tl: { col: 5.5, row: 21.2 }, ext: { width: 160, height: 50 } });
+                if (sheet2) sheet2.addImage(imageId, { tl: { col: 2.5, row: 23.2 }, ext: { width: 160, height: 50 } });
+                if (sheet3) sheet3.addImage(imageId, { tl: { col: 5.5, row: 21.2 }, ext: { width: 160, height: 50 } });
+              }
             } catch (err) {
               console.error('Signature processing error:', err);
             }
@@ -1930,10 +1956,23 @@ const adminController = {
 
           if (donation.signature && sheet) {
             try {
-              const base64Data = donation.signature.replace(/^data:image\/\w+;base64,/, "");
-              const buffer = Buffer.from(base64Data, 'base64');
-              const imageId = workbook.addImage({ buffer, extension: 'png' });
-              sheet.addImage(imageId, { tl: { col: 6.5, row: 25.2 }, ext: { width: 120, height: 50 } });
+              let buffer = null;
+              if (donation.signature.startsWith('data:image') || donation.signature.includes('base64')) {
+                const base64Data = donation.signature.replace(/^data:image\/\w+;base64,/, "");
+                buffer = Buffer.from(base64Data, 'base64');
+              } else {
+                const sigFilePath = path.join(__dirname, '../../signatures', donation.signature);
+                if (fs.existsSync(sigFilePath)) {
+                  buffer = fs.readFileSync(sigFilePath);
+                } else {
+                  console.warn(`[서명 파일 미존재]: ${sigFilePath}`);
+                }
+              }
+
+              if (buffer) {
+                const imageId = workbook.addImage({ buffer, extension: 'png' });
+                sheet.addImage(imageId, { tl: { col: 6.5, row: 25.2 }, ext: { width: 120, height: 50 } });
+              }
             } catch (err) {
               console.error('Signature processing error:', err);
             }
@@ -2010,11 +2049,24 @@ const adminController = {
 
           if (donation.signature) {
             try {
-              const base64Data = donation.signature.replace(/^data:image\/\w+;base64,/, "");
-              const buffer = Buffer.from(base64Data, 'base64');
-              const imageId = workbook.addImage({ buffer, extension: 'png' });
-              if (sheet1) sheet1.addImage(imageId, { tl: { col: 6.5, row: 40.2 }, ext: { width: 160, height: 50 } });
-              if (sheet2) sheet2.addImage(imageId, { tl: { col: 4.5, row: 19.2 }, ext: { width: 160, height: 50 } });
+              let buffer = null;
+              if (donation.signature.startsWith('data:image') || donation.signature.includes('base64')) {
+                const base64Data = donation.signature.replace(/^data:image\/\w+;base64,/, "");
+                buffer = Buffer.from(base64Data, 'base64');
+              } else {
+                const sigFilePath = path.join(__dirname, '../../signatures', donation.signature);
+                if (fs.existsSync(sigFilePath)) {
+                  buffer = fs.readFileSync(sigFilePath);
+                } else {
+                  console.warn(`[서명 파일 미존재]: ${sigFilePath}`);
+                }
+              }
+
+              if (buffer) {
+                const imageId = workbook.addImage({ buffer, extension: 'png' });
+                if (sheet1) sheet1.addImage(imageId, { tl: { col: 6.5, row: 40.2 }, ext: { width: 160, height: 50 } });
+                if (sheet2) sheet2.addImage(imageId, { tl: { col: 4.5, row: 19.2 }, ext: { width: 160, height: 50 } });
+              }
             } catch (err) {
               console.error('Signature processing error:', err);
             }

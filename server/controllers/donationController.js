@@ -1,4 +1,5 @@
 const db = require('../config/db');
+const { saveSignatureImage } = require('../utils/fileHelper');
 
 /**
  * 기부금 신청 초기 데이터 조회
@@ -195,6 +196,12 @@ exports.applyDonation = async (req, res) => {
 
       const oldAmount = existing[0].dona_amt;
 
+      // 서명 이미지 파일 저장 처리
+      let signatureFileName = existing[0].signature;
+      if (signature) {
+        signatureFileName = await saveSignatureImage(signature, cust_no, currentYear, seq_no);
+      }
+
       // 2. 상세 내역 업데이트
       await connection.execute(`
         UPDATE donation_detail SET
@@ -207,7 +214,7 @@ exports.applyDonation = async (req, res) => {
         cleanAmount, company || '기부처 미지정', receipt_yn, userId,
         agree1 || 'N', agree2 || 'N', agree3 || 'N', agree4 || 'N', agree5 || 'N', agree6 || 'N', agree7 || 'N',
         agree8 || 'N', agree9 || 'N', agree10 || 'N', agree11 || 'N', agree12 || 'N', agree13 || 'N',
-        signature || null,
+        signatureFileName,
         cust_no, currentYear, seq_no
       ]);
 
@@ -255,6 +262,12 @@ exports.applyDonation = async (req, res) => {
       );
       const nextSeq = seqResult[0].next_seq;
 
+      // 서명 이미지 파일 저장 처리
+      let signatureFileName = null;
+      if (signature) {
+        signatureFileName = await saveSignatureImage(signature, cust_no, currentYear, nextSeq);
+      }
+
       // 3. 상세 내역 추가 (13개 동의 항목 포함)
       await connection.execute(`
         INSERT INTO donation_detail (
@@ -267,7 +280,7 @@ exports.applyDonation = async (req, res) => {
         cust_no, currentYear, nextSeq, cleanAmount, company || '기부처 미지정', receipt_yn, userId, userId,
         agree1 || 'N', agree2 || 'N', agree3 || 'N', agree4 || 'N', agree5 || 'N', agree6 || 'N', agree7 || 'N',
         agree8 || 'N', agree9 || 'N', agree10 || 'N', agree11 || 'N', agree12 || 'N', agree13 || 'N',
-        signature || null
+        signatureFileName
       ]);
     }
 

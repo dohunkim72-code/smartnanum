@@ -12,8 +12,9 @@ app.use(express.json({ limit: '50mb' })); // JSON 파싱 용량 상향
 app.use(express.urlencoded({ limit: '50mb', extended: true })); // URL 인코딩 용량 상향
 app.use(morgan('dev')); // 로그 출력
 
-// 정적 파일 서빙 (빌드된 프론트엔드 파일들)
+// 정적 파일 서빙 (빌드된 프론트엔드 파일들 및 서명 이미지)
 app.use(express.static(path.join(__dirname, '../dist')));
+app.use('/signatures', express.static(path.join(__dirname, '../signatures')));
 
 // API 라우터 연결
 app.use('/api/auth', require('./routes/authRoutes'));

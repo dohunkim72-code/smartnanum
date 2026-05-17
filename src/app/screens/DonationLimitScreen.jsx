@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import Tesseract from 'tesseract.js';
 import BottomNav from '../components/BottomNav';
 
 /**
@@ -154,7 +153,17 @@ const DonationLimitScreen = () => {
     setTimeout(() => setScanResultAlert(null), 3500);
   };
 
-  // 이미지 업로드 및 초정밀 다단계 OCR 엔진 가동 (한글 주석 작성)
+  // 파일을 Base64 데이터로 변환하는 헬퍼 함수 (한글 주석)
+  const fileToBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  // 이미지 업로드 및 서버 GPT-4o OCR 엔진 가동 (한글 주석 작성)
   const handleImageUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -164,131 +173,58 @@ const DonationLimitScreen = () => {
     setUploadedImage(imageUrl);
 
     setIsScanning(true);
-    setScanProgress(0);
+    setScanProgress(5);
     setScanResultAlert(null);
-    setSalaryExtracted(false); // 새 스캔 시작 시 스캔 성공 상태 초기화 (한글 주석)
+    setSalaryExtracted(false); // 새 스캔 시작 시 상태 초기화
     setDecisionTaxExtracted(false);
 
+    let progressInterval = null;
+
     try {
-      // Tesseract.js 실시간 한글/영어 텍스트 인식 작동
-      const result = await Tesseract.recognize(
-        file,
-        'kor+eng',
-        {
-          logger: m => {
-            if (m.status === 'recognizing text') {
-              setScanProgress(Math.min(Math.floor(m.progress * 100), 99));
-            }
-          }
+      // 1. 이미지를 Base64 스트링으로 변환
+      const base64Image = await fileToBase64(file);
+      
+      // 2. 스캔 진척바 애니메이션 시뮬레이션 (최대 95%까지 부드럽게 상승)
+      let currentProgress = 5;
+      progressInterval = setInterval(() => {
+        currentProgress += (95 - currentProgress) * 0.15;
+        setScanProgress(Math.floor(currentProgress));
+      }, 250);
+
+      // 3. 서버의 GPT-4o OCR API 호출
+      const response = await fetch('/api/ocr/scan', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ image: base64Image }),
+      });
+
+      clearInterval(progressInterval);
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        // API 키 누락 등 특수 코드 처리
+        if (data.code === 'MISSING_API_KEY') {
+          throw new Error('MISSING_API_KEY');
         }
-      );
-
-      const rawText = result.data.text;
-      console.log('--- OCR 스캔 원본 텍스트 ---', rawText);
-
-      // 이미지 내에 최소한의 한글 세무 핵심 키워드가 존재하는지 체크 (노이즈 텍스트 필터링 적용)
-      const keywordRegex = /(근로|소득|세액|결정|징수|납부|세금|영수증|연말|정산)/i;
-      const hasKeywords = keywordRegex.test(rawText);
-
-      let extractedIncome = 0;
-      let extractedTax = 0;
-
-      // 이미지에 한글 세무 키워드가 하나도 발견되지 않으면 엉터리 노이즈로 간주하고 즉시 스킵
-      if (hasKeywords) {
-        // 초정밀 다단계 파싱 엔진 가동
-        // 1. 공백, 줄바꿈, 콤마 등 모든 불필요 기호 제거한 초고밀도 텍스트 생성
-        // (단어 병합 및 라인 침범 방지를 위해 공백과 줄바꿈은 파이프 기호로 치환, 콤마/점/하이픈은 완전히 제거)
-        const superCleanText = rawText
-          .replace(/[\t\r\n\s]/g, '|')
-          .replace(/[,·._\-]/g, '');
-
-        // --- 1) 23. 근로소득금액 다단계 추출 ---
-        const incomeRegexes = [
-          // 정밀 매칭 (23번 번호와 근로소득금액이 이어지는 경우)
-          /(?:23\.?|\[23\]|\(23\))?근로소득금[액애에엑][^\d]*(\d{6,12})/i,
-          // 키워드 위주 매칭
-          /근로소득금[액애에엑][^\d]*(\d{6,12})/i,
-          // 소득금액 단독 매칭
-          /(?:근로)?소득금[액애에엑][^\d]*(\d{6,12})/i,
-          // 번호 기준 매칭
-          /(?:23\.?|\[23\]|\(23\))[^\d\w]*(\d{6,12})/
-        ];
-
-        for (const regex of incomeRegexes) {
-          const match = superCleanText.match(regex);
-          if (match) {
-            extractedIncome = parseInt(match[1]) || 0;
-            break;
-          }
-        }
-
-        // Fallback: 줄바꿈 기준으로 키워드가 포함된 행 바로 다음에 숫자가 오는 경우 탐색 (원본 텍스트 기반)
-        if (extractedIncome === 0) {
-          const lines = rawText.split('\n').map(l => l.replace(/[\s,]/g, ''));
-          for (let i = 0; i < lines.length; i++) {
-            if (lines[i].includes('23') || lines[i].includes('근로소득') || lines[i].includes('소득금액')) {
-              // 현재 행 또는 다음 2행 내에서 6~12자리 숫자가 있는지 매칭
-              for (let j = 0; j <= 2 && (i + j) < lines.length; j++) {
-                const numMatch = lines[i + j].match(/(\d{6,12})/);
-                if (numMatch) {
-                  extractedIncome = parseInt(numMatch[1]) || 0;
-                  break;
-                }
-              }
-            }
-            if (extractedIncome > 0) break;
-          }
-        }
-
-        // --- 2) 72. 결정세액 다단계 추출 (공식 72767 수치 오인식 및 노이즈 건너뛰기 정밀 필터링) ---
-        const taxRegexes = [
-          // 정밀 매칭 (72번 번호와 결정세액이 이어지는 경우)
-          /(?:72\.?|\[72\]|\(72\))?결정세[액애에엑][^\d]*(?:\([^)]*\)|\[[^\]]*\]|\d{5,6})?[^\d]*(\d{4,12})/i,
-          // 키워드 위주 매칭
-          /결정세[액애에엑][^\d]*(?:\([^)]*\)|\[[^\]]*\]|\d{5,6})?[^\d]*(\d{4,12})/i,
-          // 결정세 단독 매칭
-          /결정세[^\d]*(?:\([^)]*\)|\[[^\]]*\]|\d{5,6})?[^\d]*(\d{4,12})/i,
-          // 번호 기준 매칭
-          /(?:72\.?|\[72\]|\(72\))[^\d\w]*(?:\([^)]*\)|\[[^\]]*\]|\d{5,6})?[^\d]*(\d{4,12})/
-        ];
-
-        for (const regex of taxRegexes) {
-          const match = superCleanText.match(regex);
-          if (match) {
-            extractedTax = parseInt(match[1]) || 0;
-            break;
-          }
-        }
-
-        // Fallback: 결정세액 줄바꿈 검색
-        if (extractedTax === 0) {
-          const lines = rawText.split('\n').map(l => l.replace(/[\s,]/g, ''));
-          for (let i = 0; i < lines.length; i++) {
-            if (lines[i].includes('72') || lines[i].includes('결정세') || lines[i].includes('결정새')) {
-              for (let j = 0; j <= 2 && (i + j) < lines.length; j++) {
-                const numMatch = lines[i + j].match(/(\d{4,12})/);
-                if (numMatch) {
-                  extractedTax = parseInt(numMatch[1]) || 0;
-                  break;
-                }
-              }
-            }
-            if (extractedTax > 0) break;
-          }
-        }
+        throw new Error(data.message || '서버 이미지 스캔 실패');
       }
 
       setScanProgress(100);
 
-      // 값 갱신 및 사용자 피드백 제공
-      if ((extractedIncome > 0 || extractedTax > 0) && hasKeywords) {
+      const extractedIncome = data.salary || 0;
+      const extractedTax = data.decisionTax || 0;
+
+      // 4. 값 갱신 및 사용자 피드백 제공
+      if (extractedIncome > 0 || extractedTax > 0) {
         if (extractedIncome > 0) {
           setSalary(extractedIncome.toLocaleString());
-          setSalaryExtracted(true); // 소득 스캔 추출 완료 처리 (한글 주석)
+          setSalaryExtracted(true);
         }
         if (extractedTax > 0) {
           setDecisionTax(extractedTax.toLocaleString());
-          setDecisionTaxExtracted(true); // 결정세액 스캔 추출 완료 처리 (한글 주석)
+          setDecisionTaxExtracted(true);
         }
 
         // 28% 추천 기부금도 자동 세팅 계산
@@ -298,11 +234,11 @@ const DonationLimitScreen = () => {
 
         setScanResultAlert({
           type: 'success',
-          title: '스캔 및 자동 입력 완료! 🎉',
+          title: '초정밀 AI 스캔 완료! 🎉',
           message: `원천징수영수증에서 세무 정보를 정상적으로 인식했습니다.\n• 근로소득금액: ${extractedIncome > 0 ? extractedIncome.toLocaleString() + '원' : '인식 실패 (직접 입력)'}\n• 결정세액: ${extractedTax > 0 ? extractedTax.toLocaleString() + '원' : '인식 실패 (직접 입력)'}\n\n추천 기부액(28%)인 ${autoPlanned.toLocaleString()}원이 자동 설정되었습니다.`
         });
       } else {
-        // 스캔 실패 시 모든 상태(금액 필드와 추출 완료 뱃지)를 완벽하게 빈 값으로 클린 리셋하여 사용자가 헷갈리지 않게 방어
+        // 성공 응답이지만 금액을 추출하지 못한 경우 리셋 및 실패 경고
         setSalary('');
         setDecisionTax('');
         setSalaryExtracted(false);
@@ -310,22 +246,33 @@ const DonationLimitScreen = () => {
         setScanResultAlert({
           type: 'warning',
           title: '자동 스캔 결과 미흡 ⚠️',
-          message: '이미지의 폰트나 선명도 문제로 금액을 자동으로 추출하지 못했습니다. 원본 이미지를 참고하여 아래 폼에 직접 금액을 입력해 주세요!'
+          message: '이미지의 선명도나 폰트 문제로 금액을 자동으로 추출하지 못했습니다. 아래의 입력란에 직접 금액을 기입해 주세요!'
         });
       }
 
     } catch (error) {
+      if (progressInterval) clearInterval(progressInterval);
       console.error('OCR 스캔 오류:', error);
-      // 예외 발생 시에도 안전하게 화면을 리셋하여 기존 잔상을 완벽 차단
+      
+      // 예외 발생 시 안전하게 화면 리셋
       setSalary('');
       setDecisionTax('');
       setSalaryExtracted(false);
       setDecisionTaxExtracted(false);
-      setScanResultAlert({
-        type: 'danger',
-        title: '스캔 실패 ❌',
-        message: '이미지 스캔 중 오류가 발생했습니다. 직접 소득 금액과 결정세액을 입력해 주세요.'
-      });
+
+      if (error.message === 'MISSING_API_KEY') {
+        setScanResultAlert({
+          type: 'warning',
+          title: 'OpenAI API 키 설정 필요 ⚙️',
+          message: '서버 환경 설정(.env)에 OPENAI_API_KEY가 등록되지 않았습니다. 현재 데모 또는 테스트 모드입니다. 수동으로 근로소득금액과 결정세액을 아래 필드에 입력해 주세요!\n\n💡 관리자분께서는 server/.env 파일에 발급받으신 OpenAI API Key를 등록하시면 실시간 AI 스캔 기능이 즉시 활성화됩니다.'
+        });
+      } else {
+        setScanResultAlert({
+          type: 'danger',
+          title: '스캔 실패 ❌',
+          message: '서버에서 영수증을 분석하는 중 에러가 발생했습니다. 직접 소득 금액과 결정세액을 입력해 주세요.'
+        });
+      }
     } finally {
       setIsScanning(false);
     }
@@ -357,87 +304,113 @@ const DonationLimitScreen = () => {
       </header>
 
       <main className="p-5 flex flex-col gap-6">
-        {/* 국세청 원천징수영수증 이미지 스캔 영역 */}
-        <section className="bg-white rounded-[2rem] p-6 shadow-md border border-slate-100 flex flex-col gap-4 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full -mr-12 -mt-12 blur-2xl"></div>
-          
-          <div className="flex items-center justify-between">
-            <h3 className="text-[16px] font-black flex items-center gap-2 text-slate-900">
-              <span className="material-symbols-outlined text-primary bg-primary/10 p-1.5 rounded-lg text-lg font-bold">photo_camera</span>
-              영수증 사진 올리고 자동 스캔
-            </h3>
-            <span className="text-[11px] font-black bg-indigo-50 text-primary border border-indigo-100 px-2 py-0.5 rounded-full">AI 스캐너</span>
-          </div>
+        {/* 로그인 전 AI OCR 스캐너 유도 안내 카드 */}
+        {!isLoggedIn && (
+          <section className="bg-gradient-to-br from-indigo-50 to-indigo-100/50 rounded-[2rem] p-6 shadow-md border border-indigo-100 flex flex-col gap-4 relative overflow-hidden">
+            <div className="absolute -top-10 -right-10 w-24 h-24 bg-primary/5 rounded-full blur-xl"></div>
+            <div className="flex items-center gap-3">
+              <span className="material-symbols-outlined text-primary bg-white p-2.5 rounded-2xl text-xl font-bold shadow-xs">photo_camera</span>
+              <div className="flex flex-col">
+                <h3 className="text-[15px] font-black text-slate-900 tracking-tight">AI 자동 스캔으로 간편하게 시작하세요!</h3>
+                <p className="text-[11px] text-slate-500 font-bold mt-0.5">근로소득원천징수 사진 한 장으로 끝</p>
+              </div>
+            </div>
+            <p className="text-[12px] text-slate-600 font-semibold leading-relaxed">
+              로그인 후 근로소득원천징수 사진을 업로드하시면, 복잡한 세무 데이터(소득금액 및 결정세액)를 AI가 전광석화처럼 자동으로 읽어 분석해 드립니다!
+            </p>
+            <button
+              onClick={() => navigate('/login')}
+              className="w-full h-11 bg-white hover:bg-slate-50 text-primary border border-indigo-200 active:scale-95 transition-all rounded-xl text-xs font-black shadow-xs flex items-center justify-center gap-1"
+            >
+              <span className="material-symbols-outlined text-sm font-bold">login</span>
+              로그인하고 자동 스캔 사용하기
+            </button>
+          </section>
+        )}
 
-          {/* 파일 드롭 및 프리뷰 영역 */}
-          <div className="relative w-full rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-all duration-300 overflow-hidden flex flex-col items-center justify-center min-h-[160px] p-4">
-            {uploadedImage ? (
-              <div className="relative w-full flex flex-col items-center gap-3">
-                <div className="relative rounded-xl overflow-hidden border border-slate-200 shadow-sm max-h-[140px] max-w-[200px]">
-                  <img
-                    src={uploadedImage}
-                    alt="업로드된 영수증"
-                    className="w-full h-auto object-cover"
-                  />
-                  {/* 스캔 중 빔 애니메이션 */}
-                  {isScanning && (
-                    <div className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary to-transparent scan-laser-line shadow-[0_0_12px_#3713EC]"></div>
-                  )}
-                </div>
-                
-                <div className="flex gap-2 w-full justify-center">
-                  <button
-                    onClick={() => setShowImageModal(true)}
-                    className="px-3 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-slate-700 active:scale-95 transition-all"
-                  >
-                    <span className="material-symbols-outlined text-sm">zoom_in</span> 크게보기
-                  </button>
-                  <label className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-slate-50 active:scale-95 transition-all cursor-pointer">
-                    <span className="material-symbols-outlined text-sm">cached</span> 재업로드
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleImageUpload}
-                      className="hidden"
-                      disabled={isScanning}
+        {/* 국세청 원천징수영수증 이미지 스캔 영역 - 로그인 시에만 노출 */}
+        {isLoggedIn && (
+          <section className="bg-white rounded-[2rem] p-6 shadow-md border border-slate-100 flex flex-col gap-4 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full -mr-12 -mt-12 blur-2xl"></div>
+            
+            <div className="flex items-center justify-between">
+              <h3 className="text-[16px] font-black flex items-center gap-2 text-slate-900">
+                <span className="material-symbols-outlined text-primary bg-primary/10 p-1.5 rounded-lg text-lg font-bold">photo_camera</span>
+                근로소득원천징수 사진 올리고 자동 스캔
+              </h3>
+              <span className="text-[11px] font-black bg-indigo-50 text-primary border border-indigo-100 px-2 py-0.5 rounded-full">AI 스캐너</span>
+            </div>
+
+            {/* 파일 드롭 및 프리뷰 영역 */}
+            <div className="relative w-full rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/50 hover:bg-slate-50 transition-all duration-300 overflow-hidden flex flex-col items-center justify-center min-h-[160px] p-4">
+              {uploadedImage ? (
+                <div className="relative w-full flex flex-col items-center gap-3">
+                  <div className="relative rounded-xl overflow-hidden border border-slate-200 shadow-sm max-h-[140px] max-w-[200px]">
+                    <img
+                      src={uploadedImage}
+                      alt="업로드된 원천징수영수증"
+                      className="w-full h-auto object-cover"
                     />
-                  </label>
+                    {/* 스캔 중 빔 애니메이션 */}
+                    {isScanning && (
+                      <div className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary to-transparent scan-laser-line shadow-[0_0_12px_#3713EC]"></div>
+                    )}
+                  </div>
+                  
+                  <div className="flex gap-2 w-full justify-center">
+                    <button
+                      onClick={() => setShowImageModal(true)}
+                      className="px-3 py-1.5 bg-slate-800 text-white rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-slate-700 active:scale-95 transition-all"
+                    >
+                      <span className="material-symbols-outlined text-sm">zoom_in</span> 크게보기
+                    </button>
+                    <label className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-slate-50 active:scale-95 transition-all cursor-pointer">
+                      <span className="material-symbols-outlined text-sm">cached</span> 재업로드
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                        className="hidden"
+                        disabled={isScanning}
+                      />
+                    </label>
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <label className="w-full h-full flex flex-col items-center justify-center gap-3 py-4 cursor-pointer">
-                <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:text-primary transition-all">
-                  <span className="material-symbols-outlined text-3xl">cloud_upload</span>
-                </div>
-                <div className="text-center">
-                  <p className="text-[14px] font-black text-slate-800">원천징수영수증 사진 업로드</p>
-                  <p className="text-[11px] text-slate-400 font-bold mt-1">여기를 클릭하여 사진을 추가해 주세요 (JPG, PNG)</p>
-                </div>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                />
-              </label>
-            )}
+              ) : (
+                <label className="w-full h-full flex flex-col items-center justify-center gap-3 py-4 cursor-pointer">
+                  <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center text-slate-400 group-hover:text-primary transition-all">
+                    <span className="material-symbols-outlined text-3xl">cloud_upload</span>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-[14px] font-black text-slate-800">근로소득원천징수 사진 업로드</p>
+                    <p className="text-[11px] text-slate-400 font-bold mt-1">여기를 클릭하여 사진을 추가해 주세요 (JPG, PNG)</p>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                    className="hidden"
+                  />
+                </label>
+              )}
 
-            {/* 실시간 스캔 프로그레스 오버레이 */}
-            {isScanning && (
-              <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-white z-20">
-                <span className="material-symbols-outlined text-4xl text-primary bg-white p-3 rounded-full animate-bounce mb-3 shadow-[0_0_20px_rgba(255,255,255,0.4)]">center_focus_strong</span>
-                <p className="text-sm font-black tracking-tight mb-2">원천징수영수증 이미지 분석 중...</p>
-                <div className="w-40 bg-white/20 h-2 rounded-full overflow-hidden shadow-inner mb-2">
-                  <div
-                    className="bg-primary h-full rounded-full transition-all duration-300 shadow-[0_0_8px_#3713EC]"
-                    style={{ width: `${scanProgress}%` }}
-                  ></div>
+              {/* 실시간 스캔 프로그레스 오버레이 */}
+              {isScanning && (
+                <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-white z-20">
+                  <span className="material-symbols-outlined text-4xl text-primary bg-white p-3 rounded-full animate-bounce mb-3 shadow-[0_0_20px_rgba(255,255,255,0.4)]">center_focus_strong</span>
+                  <p className="text-sm font-black tracking-tight mb-2">근로소득원천징수 이미지 분석 중...</p>
+                  <div className="w-40 bg-white/20 h-2 rounded-full overflow-hidden shadow-inner mb-2">
+                    <div
+                      className="bg-primary h-full rounded-full transition-all duration-300 shadow-[0_0_8px_#3713EC]"
+                      style={{ width: `${scanProgress}%` }}
+                    ></div>
+                  </div>
+                  <span className="text-[11px] font-black text-white/60">{scanProgress}% 스캔 중</span>
                 </div>
-                <span className="text-[11px] font-black text-white/60">{scanProgress}% 스캔 중</span>
-              </div>
-            )}
-          </div>
-        </section>
+              )}
+            </div>
+          </section>
+        )}
 
         {/* 실시간 알림창 및 피드백 */}
         {scanResultAlert && (

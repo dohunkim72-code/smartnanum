@@ -19,6 +19,7 @@ app.use(express.static(path.join(__dirname, '../dist')));
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/donation', require('./routes/donationRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
+app.use('/api/ocr', require('./routes/ocrRoutes'));
 
 // 모든 기타 경로는 프론트엔드 index.html로 연결 (React Router 대응)
 app.get('*', (req, res) => {
@@ -26,10 +27,6 @@ app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '../dist', 'index.html'));
   }
 });
-
-// 라우터 연결
-app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/donation', require('./routes/donationRoutes'));
 
 // 에러 처리 미들웨어
 app.use((err, req, res, next) => {

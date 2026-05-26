@@ -1,40 +1,80 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import HomeScreen from './src/screens/HomeScreen';
-import LoginScreen from './src/screens/LoginScreen';
-import RegisterScreen from './src/screens/RegisterScreen';
-import DashboardScreen from './src/screens/DashboardScreen';
-import CalculatorScreen from './src/screens/CalculatorScreen';
-import DonationScreen from './src/screens/DonationScreen';
-import DonationHistoryScreen from './src/screens/DonationHistoryScreen';
-import ProfileScreen from './src/screens/ProfileScreen';
-import ChangePasswordScreen from './src/screens/ChangePasswordScreen';
-
-import MainTabNavigator from './src/navigation/MainTabNavigator';
-
-const Stack = createStackNavigator();
+import React, { useState, useEffect, useRef } from 'react';
+import { StyleSheet, SafeAreaView, ActivityIndicator, View, BackHandler, Platform, ToastAndroid } from 'react-native';
+import { WebView } from 'react-native-webview';
+import { StatusBar } from 'expo-status-bar';
 
 export default function App() {
+  const webViewRef = useRef(null);
+  const [canGoBack, setCanGoBack] = useState(false);
+  const [lastBackButtonPress, setLastBackButtonPress] = useState(0);
+
+  // 안드로이드 하드웨어 뒤로가기 버튼 연동
+  useEffect(() => {
+    const onBackPress = () => {
+      if (webViewRef.current && canGoBack) {
+        webViewRef.current.goBack();
+        return true; // 기본 동작(앱 종료 등) 방지
+      } else {
+        // 첫 화면에서 뒤로가기 누를 시 "한번 더 누르면 종료" 토스트 제공
+        const currentTime = new Date().getTime();
+        if (currentTime - lastBackButtonPress < 2000) {
+          BackHandler.exitApp();
+          return false;
+        }
+        setLastBackButtonPress(currentTime);
+        if (Platform.OS === 'android') {
+          ToastAndroid.show('한번 더 누르면 종료됩니다.', ToastAndroid.SHORT);
+        }
+        return true;
+      }
+    };
+
+    BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => {
+      BackHandler.removeEventListener('hardwareBackPress', onBackPress);
+    };
+  }, [canGoBack, lastBackButtonPress]);
+
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <NavigationContainer>
-        <Stack.Navigator 
-          initialRouteName="Home"
-          screenOptions={{
-            headerShown: false,
-            cardStyle: { backgroundColor: '#fff' }
-          }}
-        >
-          <Stack.Screen name="Home" component={HomeScreen} />
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Register" component={RegisterScreen} />
-          <Stack.Screen name="Main" component={MainTabNavigator} />
-          <Stack.Screen name="Calculator" component={CalculatorScreen} />
-          <Stack.Screen name="ChangePassword" component={ChangePasswordScreen} />
-        </Stack.Navigator>
-      </NavigationContainer>
-    </GestureHandlerRootView>
+    <SafeAreaView style={styles.container}>
+      <StatusBar style="dark" />
+      <WebView
+        ref={webViewRef}
+        source={{ uri: 'https://oasis7528.cafe24.com' }}
+        style={styles.webview}
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+        startInLoadingState={true}
+        onNavigationStateChange={(navState) => {
+          setCanGoBack(navState.canGoBack);
+        }}
+        renderLoading={() => (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3713ec" />
+          </View>
+        )}
+      />
+    </SafeAreaView>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  webview: {
+    flex: 1,
+  },
+  loadingContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+    zIndex: 10,
+  },
+});

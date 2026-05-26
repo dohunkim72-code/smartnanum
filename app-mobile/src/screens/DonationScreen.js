@@ -12,6 +12,7 @@ import {
   Modal,
   ActivityIndicator,
   Platform,
+  Linking,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { 
@@ -38,6 +39,12 @@ const { width, height } = Dimensions.get('window');
 const DonationScreen = () => {
   const navigation = useNavigation();
   const route = useRoute();
+  
+  const handleOpenPrivacy = () => {
+    Linking.openURL('https://oasis7528.cafe24.com/privacy.html').catch((err) =>
+      console.error('An error occurred', err)
+    );
+  };
   
   const [loading, setLoading] = useState(false);
   const [isClosed, setIsClosed] = useState(false);
@@ -413,16 +420,21 @@ const DonationScreen = () => {
         {/* Section: Terms Agreement */}
         <View style={styles.section}>
           <Text style={styles.inputLabel}>약관 동의</Text>
-          <TouchableOpacity 
-            style={styles.termsCard}
-            onPress={() => setFormData(prev => ({ ...prev, termsAgreed: !prev.termsAgreed }))}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.checkbox, formData.termsAgreed && styles.checkboxChecked]}>
-              {formData.termsAgreed && <Check size={16} color="white" />}
-            </View>
-            <Text style={styles.termsText}>기부 신청 및 개인정보 처리 방침에 동의합니다 (필수)</Text>
-          </TouchableOpacity>
+          <View style={styles.termsCard}>
+            <TouchableOpacity 
+              style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}
+              onPress={() => setFormData(prev => ({ ...prev, termsAgreed: !prev.termsAgreed }))}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkbox, formData.termsAgreed && styles.checkboxChecked, { marginRight: 12 }]}>
+                {formData.termsAgreed && <Check size={16} color="white" />}
+              </View>
+              <Text style={styles.termsText}>기부 신청 및 개인정보 처리 방침에 동의합니다 (필수)</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleOpenPrivacy} style={{ paddingLeft: 8 }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: theme.colors.primary, textDecorationLine: 'underline' }}>[전문 보기]</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Section: Signature */}

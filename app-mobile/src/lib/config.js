@@ -1,4 +1,4 @@
-export const API_BASE_URL = 'http://192.168.0.12:3000';
+export const API_BASE_URL = 'https://oasis7528.cafe24.com';
 export const API_ENDPOINTS = {
   login: `${API_BASE_URL}/api/auth/login`,
   register: `${API_BASE_URL}/api/auth/register`,

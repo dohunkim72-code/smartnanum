@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "스마트나눔",
-    "slug": "app-mobile",
+    "slug": "smartnanum",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -29,7 +29,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "cdea5126-3fb1-41af-ba53-c296adb50b58"
+        "projectId": "6597f2d1-90dc-4479-9ec5-91dcc89d6e19"
       }
     },
     "owner": "dohuni"

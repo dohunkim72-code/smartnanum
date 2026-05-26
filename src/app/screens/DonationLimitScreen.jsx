@@ -295,7 +295,13 @@ const DonationLimitScreen = () => {
       {/* 상단 헤더 */}
       <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-md border-b border-slate-100 p-4 flex items-center h-16 shadow-sm">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => {
+            if (window.ReactNativeWebView) {
+              window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'GOBACK' }));
+            } else {
+              navigate(-1);
+            }
+          }}
           className="flex size-10 items-center justify-center text-slate-800 active:scale-90 transition-all hover:bg-slate-50 rounded-full"
         >
           <span className="material-symbols-outlined font-bold text-2xl">arrow_back_ios_new</span>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useEffect, useRef, useMemo } from 'react';
 import { StyleSheet, SafeAreaView, ActivityIndicator, View, BackHandler, Platform, ToastAndroid } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { StatusBar } from 'expo-status-bar';
@@ -8,24 +8,24 @@ const WEBVIEW_SOURCE = { uri: 'https://oasis7528.cafe24.com' };
 
 export default function App() {
   const webViewRef = useRef(null);
-  const [canGoBack, setCanGoBack] = useState(false);
-  const [lastBackButtonPress, setLastBackButtonPress] = useState(0);
+  const canGoBackRef = useRef(false);
+  const lastBackButtonPressRef = useRef(0);
 
   // 안드로이드 하드웨어 뒤로가기 버튼 연동
   useEffect(() => {
     const onBackPress = () => {
-      // 널(Null) 및 메소드 존재 여부 가드를 한 층 더 튼튼하게 보강합니다.
-      if (webViewRef.current && typeof webViewRef.current.goBack === 'function' && canGoBack) {
+      // 리액트 State 대신 useRef 값을 참조하여 렌더 레이어 간섭 없이 작동합니다.
+      if (webViewRef.current && typeof webViewRef.current.goBack === 'function' && canGoBackRef.current) {
         webViewRef.current.goBack();
         return true; // 기본 동작(앱 종료 등) 방지
       } else {
         // 첫 화면에서 뒤로가기 누를 시 "한번 더 누르면 종료" 토스트 제공
         const currentTime = new Date().getTime();
-        if (currentTime - lastBackButtonPress < 2000) {
+        if (currentTime - lastBackButtonPressRef.current < 2000) {
           BackHandler.exitApp();
           return false;
         }
-        setLastBackButtonPress(currentTime);
+        lastBackButtonPressRef.current = currentTime;
         if (Platform.OS === 'android') {
           ToastAndroid.show('한번 더 누르면 종료됩니다.', ToastAndroid.SHORT);
         }
@@ -37,7 +37,7 @@ export default function App() {
     return () => {
       BackHandler.removeEventListener('hardwareBackPress', onBackPress);
     };
-  }, [canGoBack, lastBackButtonPress]);
+  }, []); // 의존성 배열을 제거하여 최초 1회만 리스너를 생성하고, 리렌더링에 노출되지 않도록 최적화합니다.
 
   // 웹뷰로부터의 메시지 수신 (크래시 방지용 귀 역할)
   const handleMessage = (event) => {
@@ -50,7 +50,7 @@ export default function App() {
       
       // 웹뷰 내부에서 이전 화면으로의 뒤로가기를 요청할 때 안전하게 반응
       if (message.type === 'GOBACK') {
-        if (webViewRef.current && typeof webViewRef.current.goBack === 'function' && canGoBack) {
+        if (webViewRef.current && typeof webViewRef.current.goBack === 'function' && canGoBackRef.current) {
           webViewRef.current.goBack();
         }
       }
@@ -60,7 +60,7 @@ export default function App() {
     }
   };
 
-  // [핵심 변경] canGoBack 상태가 변경되어 리렌더링될 때 WebView 컴포넌트가 파괴/재생성되는 것을 방지하기 위해 캐싱합니다.
+  // [핵심 최적화] useState를 쓰지 않고 useRef만 조작하므로, webViewComponent는 컴포넌트 라이프사이클 전체에서 리렌더링 충돌이 물리적으로 발생하지 않습니다.
   const webViewComponent = useMemo(() => {
     return (
       <WebView
@@ -73,14 +73,11 @@ export default function App() {
         mixedContentMode="always" // HTTPS/HTTP 혼합 컨텐츠 로드 시의 예외 종료 방지
         allowsInlineMediaPlayback={true}
         setSupportMultipleWindows={false} // target="_blank" 등의 새 창 생성 시 에러 종료 방지
-        androidHardwareAccelerationDisabled={Platform.OS === 'android'} // 안드로이드 특정 하드웨어 그래픽 가속 충돌 방지
+        androidHardwareAccelerationDisabled={false} // [3차 조치] 테일윈드/CSS 애니메이션 그래픽 렌더링 시 크래시 예방을 위해 하드웨어 가속을 다시 켭니다.
         onNavigationStateChange={(navState) => {
           if (navState) {
-            // [네이티브 경합 회피] 즉시 상태를 동기적으로 변경하여 리렌더링하지 않고,
-            // 웹뷰 스레드가 페이지 전환을 마무리할 수 있도록 다음 태스크 틱에 비동기로 실행합니다.
-            setTimeout(() => {
-              setCanGoBack(navState.canGoBack);
-            }, 0);
+            // [Zero-Re-rendering] 리액트 UI 갱신 시도 없이 오직 ref 변수만 안전하게 기록하여 레이아웃 경합을 원천 차단합니다.
+            canGoBackRef.current = navState.canGoBack;
           }
         }}
         onMessage={handleMessage} // 크래시 방지 핵심 리스너 탑재
@@ -91,7 +88,7 @@ export default function App() {
         )}
       />
     );
-  }, []); // 최초 1회만 인스턴스를 빌드하고 캐시를 보존합니다.
+  }, []); // 최초 1회만 인스턴스를 빌드하고 캐시를 완벽히 유지합니다.
 
   return (
     <SafeAreaView style={styles.container}>

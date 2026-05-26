@@ -41,8 +41,11 @@ export default function App() {
   // 웹뷰로부터의 메시지 수신 (크래시 방지용 귀 역할)
   const handleMessage = (event) => {
     try {
-      console.log('웹뷰로부터 메시지 수신:', event.nativeEvent.data);
-      const message = JSON.parse(event.nativeEvent.data);
+      const data = event.nativeEvent.data;
+      if (!data) return;
+
+      console.log('웹뷰로부터 메시지 수신:', data);
+      const message = JSON.parse(data);
       
       // 웹뷰 내부에서 이전 화면으로의 뒤로가기를 요청할 때 안전하게 반응
       if (message.type === 'GOBACK') {
@@ -61,11 +64,15 @@ export default function App() {
       <StatusBar style="dark" />
       <WebView
         ref={webViewRef}
-        source={WEBVIEW_SOURCE} // 고정된 레퍼런스 주입으로 리로드 방지!
-        style={styles.webview}
+        source={WEBVIEW_SOURCE} // 고정된 레퍼런스 주입으로 리로드 방지
+        style={[styles.webview, { opacity: 0.99 }]} // [안드로이드 치트키] 그래픽 렌더링 크래시 원천 차단 우회 필터
         javaScriptEnabled={true}
         domStorageEnabled={true}
         startInLoadingState={true}
+        mixedContentMode="always" // HTTPS/HTTP 혼합 컨텐츠 로드 시의 예외 종료 방지
+        allowsInlineMediaPlayback={true}
+        setSupportMultipleWindows={false} // target="_blank" 등의 새 창 생성 시 에러 종료 방지
+        androidHardwareAccelerationDisabled={Platform.OS === 'android'} // 안드로이드 특정 하드웨어 그래픽 가속 충돌 방지
         onNavigationStateChange={(navState) => {
           setCanGoBack(navState.canGoBack);
         }}

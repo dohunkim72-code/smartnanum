@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { StyleSheet, SafeAreaView, ActivityIndicator, View, BackHandler, Platform, ToastAndroid } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { StatusBar } from 'expo-status-bar';
@@ -14,7 +14,8 @@ export default function App() {
   // 안드로이드 하드웨어 뒤로가기 버튼 연동
   useEffect(() => {
     const onBackPress = () => {
-      if (webViewRef.current && canGoBack) {
+      // 널(Null) 및 메소드 존재 여부 가드를 한 층 더 튼튼하게 보강합니다.
+      if (webViewRef.current && typeof webViewRef.current.goBack === 'function' && canGoBack) {
         webViewRef.current.goBack();
         return true; // 기본 동작(앱 종료 등) 방지
       } else {
@@ -49,7 +50,7 @@ export default function App() {
       
       // 웹뷰 내부에서 이전 화면으로의 뒤로가기를 요청할 때 안전하게 반응
       if (message.type === 'GOBACK') {
-        if (webViewRef.current && canGoBack) {
+        if (webViewRef.current && typeof webViewRef.current.goBack === 'function' && canGoBack) {
           webViewRef.current.goBack();
         }
       }
@@ -59,9 +60,9 @@ export default function App() {
     }
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="dark" />
+  // [핵심 변경] canGoBack 상태가 변경되어 리렌더링될 때 WebView 컴포넌트가 파괴/재생성되는 것을 방지하기 위해 캐싱합니다.
+  const webViewComponent = useMemo(() => {
+    return (
       <WebView
         ref={webViewRef}
         source={WEBVIEW_SOURCE} // 고정된 레퍼런스 주입으로 리로드 방지
@@ -74,7 +75,13 @@ export default function App() {
         setSupportMultipleWindows={false} // target="_blank" 등의 새 창 생성 시 에러 종료 방지
         androidHardwareAccelerationDisabled={Platform.OS === 'android'} // 안드로이드 특정 하드웨어 그래픽 가속 충돌 방지
         onNavigationStateChange={(navState) => {
-          setCanGoBack(navState.canGoBack);
+          if (navState) {
+            // [네이티브 경합 회피] 즉시 상태를 동기적으로 변경하여 리렌더링하지 않고,
+            // 웹뷰 스레드가 페이지 전환을 마무리할 수 있도록 다음 태스크 틱에 비동기로 실행합니다.
+            setTimeout(() => {
+              setCanGoBack(navState.canGoBack);
+            }, 0);
+          }
         }}
         onMessage={handleMessage} // 크래시 방지 핵심 리스너 탑재
         renderLoading={() => (
@@ -83,6 +90,13 @@ export default function App() {
           </View>
         )}
       />
+    );
+  }, []); // 최초 1회만 인스턴스를 빌드하고 캐시를 보존합니다.
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar style="dark" />
+      {webViewComponent}
     </SafeAreaView>
   );
 }

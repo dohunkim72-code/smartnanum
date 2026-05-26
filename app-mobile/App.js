@@ -3,6 +3,9 @@ import { StyleSheet, SafeAreaView, ActivityIndicator, View, BackHandler, Platfor
 import { WebView } from 'react-native-webview';
 import { StatusBar } from 'expo-status-bar';
 
+// 리렌더링 시 웹뷰 강제 리로드 현상을 원천 방지하기 위해 source 객체 레퍼런스를 상수로 완전 고정합니다.
+const WEBVIEW_SOURCE = { uri: 'https://oasis7528.cafe24.com' };
+
 export default function App() {
   const webViewRef = useRef(null);
   const [canGoBack, setCanGoBack] = useState(false);
@@ -58,7 +61,7 @@ export default function App() {
       <StatusBar style="dark" />
       <WebView
         ref={webViewRef}
-        source={{ uri: 'https://oasis7528.cafe24.com' }}
+        source={WEBVIEW_SOURCE} // 고정된 레퍼런스 주입으로 리로드 방지!
         style={styles.webview}
         javaScriptEnabled={true}
         domStorageEnabled={true}

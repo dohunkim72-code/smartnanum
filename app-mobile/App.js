@@ -35,6 +35,24 @@ export default function App() {
     };
   }, [canGoBack, lastBackButtonPress]);
 
+  // 웹뷰로부터의 메시지 수신 (크래시 방지용 귀 역할)
+  const handleMessage = (event) => {
+    try {
+      console.log('웹뷰로부터 메시지 수신:', event.nativeEvent.data);
+      const message = JSON.parse(event.nativeEvent.data);
+      
+      // 웹뷰 내부에서 이전 화면으로의 뒤로가기를 요청할 때 안전하게 반응
+      if (message.type === 'GOBACK') {
+        if (webViewRef.current && canGoBack) {
+          webViewRef.current.goBack();
+        }
+      }
+    } catch (e) {
+      // JSON 파싱 실패 혹은 단순 텍스트 신호인 경우 크래시 없이 안전하게 무시
+      console.log('웹뷰 메시지 안전 스킵:', event.nativeEvent.data);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
@@ -48,6 +66,7 @@ export default function App() {
         onNavigationStateChange={(navState) => {
           setCanGoBack(navState.canGoBack);
         }}
+        onMessage={handleMessage} // 크래시 방지 핵심 리스너 탑재
         renderLoading={() => (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color="#3713ec" />

@@ -64,6 +64,7 @@ router.delete('/products/:product_code', adminController.deleteProduct);
 // 상품입고 관리
 router.get('/receipts', adminController.getReceipts);
 router.post('/receipts', adminController.createReceipt);
+router.put('/receipts/:receipt_yymm/:client_no/:product_code/:seq_no', adminController.updateReceipt);
 router.delete('/receipts/:receipt_yymm/:client_no/:product_code/:seq_no', adminController.deleteReceipt);
 
 // 재고 현황
@@ -79,8 +80,10 @@ router.get('/referrals', adminController.getReferralList);
 // 기부 신청 관리
 router.get('/donations', adminController.getDonations);
 router.get('/donations/recent/:cust_no', adminController.getRecentDonationInfo);
+router.get('/donations/detail/:cust_no/:dona_yy', adminController.getDonationDetail);
 router.post('/donations', adminController.createDonation);
 router.put('/donations', adminController.updateDonation);
+router.post('/donations/deposit', adminController.createDeposit);
 router.delete('/donations/:cust_no/:dona_yy/:seq_no', adminController.deleteDonation);
 
 // 기부금 생성 관리 (재고 매칭 및 출고 처리)

@@ -37,7 +37,8 @@ const AdminDonationCreate = () => {
   const [detailItem, setDetailItem] = useState(null);
   const [filters, setFilters] = useState({
     dona_yy: new Date().getFullYear().toString(),
-    referral_code: ''
+    referral_code: '',
+    pre_deposit_yn: 'all' // 선수금 입금 여부 필터 (all, Y, N)
   });
 
   // 상태 모달 제어
@@ -58,7 +59,9 @@ const AdminDonationCreate = () => {
     try {
       setLoading(true);
       const query = new URLSearchParams(filters).toString();
-      const response = await fetch(`/api/admin/donations/create-list?${query}`);
+      const response = await fetch(`/api/admin/donations/create-list?${query}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       const data = await response.json();
       if (response.ok && Array.isArray(data)) {
         setTargets(data);
@@ -76,7 +79,9 @@ const AdminDonationCreate = () => {
 
   const fetchReferrals = async () => {
     try {
-      const response = await fetch('/api/admin/referrals');
+      const response = await fetch('/api/admin/referrals', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       const data = await response.json();
       if (response.ok && Array.isArray(data)) setReferrals(data);
     } catch (error) {
@@ -90,7 +95,7 @@ const AdminDonationCreate = () => {
 
   useEffect(() => {
     fetchTargets();
-  }, [filters.dona_yy, filters.referral_code]);
+  }, [filters.dona_yy, filters.referral_code, filters.pre_deposit_yn]);
 
   const handleSelectAll = (e) => {
     e.stopPropagation();
@@ -119,7 +124,10 @@ const AdminDonationCreate = () => {
 
       const response = await fetch('/api/admin/donations/generate-release', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({
           customers: selectedCustomers,
           reg_id: JSON.parse(localStorage.getItem('adminInfo') || '{}').id || 'admin'
@@ -232,6 +240,22 @@ const AdminDonationCreate = () => {
               >
                 <option value="">모든 추천인</option>
                 {referrals.map(r => <option key={r.referral_code} value={r.referral_code}>{r.name} ({r.referral_code})</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-2 min-w-[180px]">
+            <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1">선수금 필터</label>
+            <div className="relative group">
+              <ListFilter className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors" size={18} />
+              <select
+                value={filters.pre_deposit_yn}
+                onChange={(e) => setFilters({ ...filters, pre_deposit_yn: e.target.value })}
+                className="w-full pl-12 pr-10 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500/20 focus:bg-white transition-all outline-none font-bold appearance-none cursor-pointer text-slate-700"
+              >
+                <option value="all">전체</option>
+                <option value="Y">입금</option>
+                <option value="N">미입금</option>
               </select>
             </div>
           </div>
@@ -372,6 +396,7 @@ const AdminDonationCreate = () => {
                 <th className="px-6 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest">추천인</th>
                 <th className="px-6 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest text-right">전년이월</th>
                 <th className="px-6 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest text-right">신청금액</th>
+                <th className="px-6 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest text-right">선수금</th>
                 <th className="px-6 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest text-center">상태</th>
                 <th className="px-8 py-6 text-[11px] font-black text-slate-400 uppercase tracking-widest text-center">상세</th>
               </tr>
@@ -379,7 +404,7 @@ const AdminDonationCreate = () => {
             <tbody className="divide-y divide-slate-50">
               {loading ? (
                 <tr>
-                  <td colSpan="7" className="px-8 py-24 text-center">
+                  <td colSpan="8" className="px-8 py-24 text-center">
                     <div className="flex flex-col items-center gap-4">
                       <RefreshCw className="animate-spin text-indigo-500" size={40} />
                       <p className="text-slate-400 font-bold">대상 목록을 불러오는 중입니다...</p>
@@ -388,7 +413,7 @@ const AdminDonationCreate = () => {
                 </tr>
               ) : targets.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="px-8 py-24 text-center">
+                  <td colSpan="8" className="px-8 py-24 text-center">
                     <div className="flex flex-col items-center gap-4">
                       <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center text-slate-200">
                         <History size={32} />
@@ -442,6 +467,11 @@ const AdminDonationCreate = () => {
                       <td className="px-6 py-6 text-right font-mono">
                         <p className="text-sm font-black text-slate-900">
                           {formatAmt(t.dona_amt)}원
+                        </p>
+                      </td>
+                      <td className="px-6 py-6 text-right font-mono">
+                        <p className="text-sm font-black text-emerald-600">
+                          {formatAmt(t.pre_deposit_sum || 0)}원
                         </p>
                       </td>
                       <td className="px-6 py-6 text-center">

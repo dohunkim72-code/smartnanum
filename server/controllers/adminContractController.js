@@ -29,7 +29,7 @@ const adminContractController = {
       const prevYear = parseInt(targetYear) - 1;
 
       let referralClause = '';
-      const params = [targetYear, targetYear, targetYear]; // curr, prev, status_check
+      const params = [targetYear, prevYear, targetYear]; // curr, prev, status_check
 
       if (referral_code) {
         referralClause = 'AND c.referral_code = ?';
@@ -57,7 +57,7 @@ const adminContractController = {
         LEFT JOIN donation_master curr ON c.cust_no = curr.cust_no AND curr.dona_yy = ?
         LEFT JOIN donation_master prev ON c.cust_no = prev.cust_no AND prev.dona_yy = ?
         LEFT JOIN (
-          SELECT cust_no, dona_yy, SUM(total_amount) as real_amt 
+          SELECT cust_no, SUM(total_amount) as real_amt 
           FROM product_release_master 
           WHERE dona_yy = ? 
           GROUP BY cust_no
@@ -141,9 +141,8 @@ const adminContractController = {
             FROM product_release_master 
             GROUP BY cust_no, dona_yy
           ) prm ON prm.cust_no = dm.cust_no AND prm.dona_yy = dm.dona_yy
-          LEFT JOIN bankinfo bk ON r.referral_code = bk.referral_code  
+          LEFT JOIN bankInfo bk ON r.referral_code = bk.referral_code  
           WHERE dm.dona_yy = ? AND dm.cust_no = ?
-          GROUP BY dm.cust_no
         `, [dona_yy, cust_no]);
 
         if (rows.length === 0) continue;

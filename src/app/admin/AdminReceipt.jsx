@@ -13,7 +13,8 @@ import {
   Hash,
   Filter,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Edit2
 } from 'lucide-react';
 
 /**
@@ -28,6 +29,10 @@ const AdminReceipt = () => {
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7)); // 현재 년-월 (YYYY-MM)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  
+  // 수정 관련 상태 추가 (한글 주석)
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editKey, setEditKey] = useState(null); // { receipt_yymm, client_no, product_code, seq_no }
   
   const [formData, setFormData] = useState({
     receipt_date: new Date().toISOString().split('T')[0],
@@ -56,15 +61,51 @@ const AdminReceipt = () => {
     });
   };
 
-  // 모달 열기
+  // 등록 모달 열기
   const openModal = () => {
     resetForm();
+    setIsEditMode(false);
+    setEditKey(null);
+    setIsModalOpen(true);
+  };
+
+  // 수정 모달 열기 (기존 입고 데이터를 폼에 자동 셋팅)
+  const openEditModal = (r) => {
+    // receipt_date를 YYYY-MM-DD 형식으로 정규화 (DB에서 ISO 형태로 오는 경우 처리)
+    let dateStr = r.receipt_date || '';
+    if (dateStr && dateStr.length > 10) {
+      dateStr = dateStr.substring(0, 10);
+    }
+    if (dateStr && dateStr.includes('T')) {
+      dateStr = dateStr.split('T')[0];
+    }
+    // Date 객체인 경우에도 안전하게 처리
+    if (!dateStr && r.receipt_date instanceof Date) {
+      dateStr = r.receipt_date.toISOString().split('T')[0];
+    }
+    
+    setFormData({
+      receipt_date: dateStr,
+      client_no: r.client_no,
+      product_code: r.product_code,
+      quantity: r.quantity,
+      unit_price: r.unit_price
+    });
+    setIsEditMode(true);
+    setEditKey({
+      receipt_yymm: r.receipt_yymm,
+      client_no: r.client_no,
+      product_code: r.product_code,
+      seq_no: r.seq_no
+    });
     setIsModalOpen(true);
   };
 
   // 모달 닫기
   const closeModal = () => {
     setIsModalOpen(false);
+    setIsEditMode(false);
+    setEditKey(null);
   };
 
   // 데이터 로드 (입고 내역, 상품 목록, 기부처 목록)
@@ -117,7 +158,7 @@ const AdminReceipt = () => {
     return matchesSearch && matchesMonth;
   });
 
-  // 입고 등록 처리
+  // 입고 등록 및 수정 처리 (한글 주석)
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.client_no || !formData.product_code || formData.quantity <= 0) {
@@ -133,27 +174,46 @@ const AdminReceipt = () => {
     const adminId = adminInfo.referral_code || 'admin';
 
     try {
-      const response = await fetch('/api/admin/receipts', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          ...formData,
-          reg_id: adminId
-        })
-      });
+      let response;
+      if (isEditMode && editKey) {
+        // 수정 요청인 경우 PUT 메소드 사용
+        response = await fetch(`/api/admin/receipts/${editKey.receipt_yymm}/${editKey.client_no}/${editKey.product_code}/${editKey.seq_no}`, {
+          method: 'PUT',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({
+            ...formData,
+            reg_id: adminId
+          })
+        });
+      } else {
+        // 신규 등록 요청인 경우 POST 메소드 사용
+        response = await fetch('/api/admin/receipts', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify({
+            ...formData,
+            reg_id: adminId
+          })
+        });
+      }
 
       if (response.ok) {
         setStatusModal({
           show: true,
           type: 'success',
-          message: '물품 입고 처리가 완벽하게 완료되었습니다!\n재고에 실시간으로 반영되었습니다.'
+          message: isEditMode 
+            ? '물품 입고 내역이 성공적으로 수정되었습니다!\n재고에 실시간으로 반영되었습니다.' 
+            : '물품 입고 처리가 완벽하게 완료되었습니다!\n재고에 실시간으로 반영되었습니다.'
         });
         closeModal();
         fetchData();
-        // 폼 초기화 (성공 후에도 초기화)
+        // 폼 초기화
         resetForm();
         // 성공 시 2초 후 자동 닫기
         setTimeout(() => setStatusModal(prev => ({ ...prev, show: false })), 2000);
@@ -337,13 +397,22 @@ const AdminReceipt = () => {
                         <div className="text-sm font-bold text-gray-800 mt-0.5">{formatValue(r.total_amount)}원</div>
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <button
-                          onClick={() => handleDelete(r)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          title="삭제"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => openEditModal(r)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="수정"
+                          >
+                            <Edit2 size={18} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(r)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="삭제"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -367,7 +436,7 @@ const AdminReceipt = () => {
                 </div>
                 <div>
                   <h2 className="text-3xl font-black text-slate-900 tracking-tight leading-none">
-                    신규 입고 등록
+                    {isEditMode ? '입고 내역 수정' : '신규 입고 등록'}
                   </h2>
                   <div className="text-slate-400 text-sm font-bold mt-2 uppercase tracking-widest flex items-center gap-2">
                     <div className="w-1 h-1 rounded-full bg-blue-500"></div>
@@ -509,7 +578,7 @@ const AdminReceipt = () => {
                     className="flex-[2] py-5 rounded-[1.75rem] bg-gradient-to-r from-blue-600 to-indigo-600 text-white transition-all shadow-xl shadow-blue-600/30 font-black flex items-center justify-center gap-3 active:scale-95 hover:brightness-110"
                   >
                     <Save size={24} strokeWidth={2.5} />
-                    입고 데이터 확정
+                    {isEditMode ? '수정 내용 저장' : '입고 데이터 확정'}
                   </button>
                 </div>
               </form>

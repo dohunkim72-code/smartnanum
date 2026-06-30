@@ -436,3 +436,66 @@ exports.getDonationYearlySummary = async (req, res) => {
     res.status(500).json({ message: '연도별 합산 조회 중 오류가 발생했습니다.' });
   }
 };
+
+/**
+ * 고객 본인의 기부금 신청 취소 (01 기부요청 상태만 가능)
+ */
+exports.cancelDonation = async (req, res) => {
+  const { id, year, seqNo } = req.body;
+  const connection = await db.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    // 1. 사용자 로그인 ID로 cust_no 조회
+    const [user] = await connection.execute('SELECT cust_no FROM cust WHERE id = ?', [id]);
+    if (user.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: '사용자를 찾을 수 없습니다.' });
+    }
+    const custNo = user[0].cust_no;
+
+    // 2. 해당 기부금 신청 상세 내역 상태 체크
+    const [old] = await connection.execute(
+      'SELECT dona_amt, step_code FROM donation_detail WHERE cust_no = ? AND dona_yy = ? AND seq_no = ?',
+      [custNo, year, seqNo]
+    );
+
+    if (old.length === 0) {
+      await connection.rollback();
+      return res.status(404).json({ message: '취소할 기부 신청 내역을 찾을 수 없습니다.' });
+    }
+
+    if (old[0].step_code !== '01') {
+      await connection.rollback();
+      return res.status(400).json({ message: '기부요청(01) 상태인 경우만 취소할 수 있습니다.' });
+    }
+
+    // 3. 기부 상세 내역 삭제
+    await connection.execute(
+      'DELETE FROM donation_detail WHERE cust_no = ? AND dona_yy = ? AND seq_no = ?',
+      [custNo, year, seqNo]
+    );
+
+    // 4. 마스터 테이블 금액 재계산 및 업데이트
+    await connection.execute(
+      `UPDATE donation_master m
+       SET total_dona_amt = (SELECT IFNULL(SUM(dona_amt), 0) FROM donation_detail WHERE cust_no = m.cust_no AND dona_yy = m.dona_yy),
+           total_real_amt = (SELECT IFNULL(SUM(deposit_amt), 0) FROM donation_detail WHERE cust_no = m.cust_no AND dona_yy = m.dona_yy),
+           upd_date = NOW()
+       WHERE cust_no = ? AND dona_yy = ?`,
+      [custNo, year]
+    );
+
+    await connection.commit();
+    res.json({ message: '기부금 신청이 정상적으로 취소되었습니다.' });
+
+  } catch (error) {
+    if (connection) await connection.rollback();
+    console.error('cancelDonation Error:', error);
+    res.status(500).json({ message: '기부 신청 취소 중 오류가 발생했습니다.' });
+  } finally {
+    if (connection) connection.release();
+  }
+};
+

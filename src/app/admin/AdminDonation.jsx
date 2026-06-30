@@ -30,6 +30,7 @@ const AdminDonation = () => {
 
   const [donations, setDonations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isReadOnly, setIsReadOnly] = useState(false); // 상세 조회(읽기 전용) 상태 변수 (한글 주석)
   const canvasRef = useRef(null);
   
   // 필터 상태
@@ -132,33 +133,66 @@ const AdminDonation = () => {
     fetchUserList();
   }, []);
 
+  // 모달이 열리고 서명 정보가 있을 때 캔버스에 서명 로드 (한글 주석)
+  useEffect(() => {
+    if (isModalOpen && formData.signature && canvasRef.current) {
+      const canvas = canvasRef.current;
+      const ctx = canvas.getContext('2d');
+      const img = new Image();
+      img.onload = () => {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      };
+      const isBase64 = formData.signature.startsWith('data:image') || formData.signature.includes('base64');
+      img.src = isBase64 ? formData.signature : `/signatures/${formData.signature}`;
+    }
+  }, [isModalOpen, formData.signature]);
+
   const handleSearch = (e) => {
     if (e.key === 'Enter') fetchDonations();
   };
 
-  const openModal = (dona = null) => {
+  const openModal = async (dona = null, readOnly = false) => {
+    setIsReadOnly(readOnly); // 읽기 전용 상태 설정 (한글 주석)
     if (dona) {
-      setCurrentDona(dona);
-      setFormData({
-        cust_no: dona.cust_no,
-        name: dona.cust_name || '',
-        hpno: dona.cust_hpno || '',
-        dona_yy: dona.dona_yy,
-        seq_no: dona.seq_no,
-        dona_amt: dona.dona_amt,
-        last_amt: dona.last_amt || 0, // 전년이월 추가
-        company_name: dona.company_name,
-        receipt_yn: dona.receipt_yn,
-        step_code: dona.step_code,
-        jmin1: dona.jmin1 || '',
-        jmin2: dona.jmin2 || '',
-        zipcode: dona.zipcode || '',
-        address: dona.address || '',
-        address_detail: dona.address_detail || '',
-        agrees: Array(13).fill(true),
-        signature: dona.signature
-      });
-      setSearchTerm(dona.cust_name || '');
+      try {
+        setLoading(true);
+        const data = await api.get(`/admin/donations/detail/${dona.cust_no}/${dona.dona_yy}`);
+        
+        const agreesArray = [];
+        for (let i = 1; i <= 13; i++) {
+          agreesArray.push(data[`agree${i}`] === 'Y');
+        }
+
+        setCurrentDona(data);
+        setFormData({
+          cust_no: data.cust_no,
+          name: data.cust_name || '',
+          hpno: data.cust_hpno || '',
+          dona_yy: data.dona_yy,
+          seq_no: data.seq_no,
+          dona_amt: data.dona_amt,
+          real_amt: data.real_amt || 0, // 결제 금액 추가 (한글 주석)
+          last_amt: data.last_amt || 0,
+          company_name: data.company_name || '',
+          receipt_yn: data.receipt_yn || 'N',
+          step_code: data.step_code,
+          jmin1: data.jmin1 || '',
+          jmin2: data.jmin2 || '',
+          zipcode: data.zipcode || '',
+          address: data.address || '',
+          address_detail: data.address_detail || '',
+          agrees: agreesArray,
+          signature: data.signature || null
+        });
+        setSearchTerm(data.cust_name || '');
+        setIsModalOpen(true);
+      } catch (error) {
+        console.error('상세 정보 로드 실패:', error);
+        showStatus('error', '상세 정보 로드 실패', '상세 기부 정보를 불러오지 못했습니다.');
+      } finally {
+        setLoading(false);
+      }
     } else {
       setCurrentDona(null);
       setFormData({
@@ -167,6 +201,7 @@ const AdminDonation = () => {
         hpno: '',
         dona_yy: new Date().getFullYear().toString(),
         dona_amt: '',
+        real_amt: 0, // 결제 금액 초기값 (한글 주석)
         last_amt: 0, // 전년이월 초기화
         company_name: '',
         receipt_yn: 'N', // 신청안함
@@ -180,8 +215,50 @@ const AdminDonation = () => {
         signature: null
       });
       setSearchTerm('');
+      setIsModalOpen(true);
     }
-    setIsModalOpen(true);
+  };
+
+  // 미신청 회원용 자동 정보 세팅 신규 신청 모달 오픈 함수 (한글 주석)
+  const openModalForNewApply = async (dona) => {
+    try {
+      setLoading(true);
+      setIsReadOnly(false); // 신규 신청 시 읽기 전용 상태 해제 (한글 주석)
+      let recent = null;
+      try {
+        recent = await api.get(`/admin/donations/recent/${dona.cust_no}`);
+      } catch (e) {
+        console.error('최근 기부 정보 조회 실패:', e);
+      }
+
+      setCurrentDona(null); // 신규 신청이므로 null로 지정
+      setFormData({
+        cust_no: dona.cust_no,
+        name: dona.cust_name || '',
+        hpno: dona.cust_hpno || '',
+        dona_yy: filters.dona_yy, // 현재 검색 필터에 설정된 연도로 설정
+        dona_amt: '',
+        real_amt: 0, // 결제 금액 초기값 (한글 주석)
+        last_amt: 0,
+        company_name: '',
+        receipt_yn: 'N',
+        step_code: '01',
+        jmin1: recent?.jmin1 || '',
+        jmin2: recent?.jmin2 || '',
+        zipcode: recent?.zipcode || '',
+        address: recent?.address || '',
+        address_detail: recent?.address_detail || '',
+        agrees: Array(13).fill(false),
+        signature: null
+      });
+      setSearchTerm(dona.cust_name || '');
+      setIsModalOpen(true);
+    } catch (error) {
+      console.error('신청 정보 로드 실패:', error);
+      showStatus('error', '정보 로드 실패', '회원 정보를 불러오지 못했습니다.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleUserSearch = (val) => {
@@ -459,11 +536,27 @@ const AdminDonation = () => {
                     </td>
                     <td className="px-6 py-4 text-center">
                       <div className="flex justify-center gap-2">
-                        {d.step_code === '01' ? (
+                        {d.step_code === '00' ? (
+                          <button
+                            onClick={() => openModalForNewApply(d)}
+                            className="px-3 py-1.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all text-xs font-bold shadow-md active:scale-95 flex items-center gap-1"
+                            title="신청"
+                          >
+                            <Plus size={14} /> 신청
+                          </button>
+                        ) : d.step_code === '01' ? (
                           <>
                             <button onClick={() => openModal(d)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="수정"><Edit2 size={18} /></button>
                             <button onClick={() => handleDelete(d)} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="삭제"><Trash2 size={18} /></button>
                           </>
+                        ) : ['02', '03', '04'].includes(d.step_code) ? (
+                          <button
+                            onClick={() => openModal(d, true)}
+                            className="px-3 py-1.5 bg-slate-600 text-white rounded-xl hover:bg-slate-700 transition-all text-xs font-bold shadow-md active:scale-95 flex items-center gap-1"
+                            title="조회"
+                          >
+                            <Search size={14} /> 조회
+                          </button>
                         ) : (
                           <span className="text-xs text-slate-300 font-medium italic">수정불가</span>
                         )}
@@ -484,12 +577,12 @@ const AdminDonation = () => {
           <div className="relative bg-white w-full max-w-2xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300 my-8">
             <div className="px-10 py-8 border-b border-slate-50 flex items-center justify-between relative">
               <div className="absolute top-0 left-0 w-full h-1.5 bg-indigo-600"></div>
-              <h2 className="text-2xl font-black text-slate-900">{currentDona ? '기부 내역 수정' : '기부 신청 수기 등록'}</h2>
+              <h2 className="text-2xl font-black text-slate-900">{isReadOnly ? '기부 상세 조회' : currentDona ? '기부 내역 수정' : '기부 신청 수기 등록'}</h2>
               <button onClick={() => setIsModalOpen(false)} className="p-3 hover:bg-slate-50 rounded-2xl text-slate-300 hover:text-slate-900 transition-all"><X size={24} /></button>
             </div>
             
             <div className="p-10 space-y-8 max-h-[70vh] overflow-y-auto custom-scrollbar">
-              <form onSubmit={handleSubmit} className="space-y-8">
+              <form onSubmit={isReadOnly ? (e) => e.preventDefault() : handleSubmit} className="space-y-8">
                 {/* 섹션 1: 회원 검색 및 기본 정보 */}
                 <div className="space-y-4">
                   <h3 className="text-[11px] font-black text-indigo-500 uppercase tracking-widest flex items-center gap-2">
@@ -501,7 +594,7 @@ const AdminDonation = () => {
                       <div className="relative">
                         <input
                           type="text"
-                          disabled={!!currentDona}
+                          disabled={!!currentDona || isReadOnly}
                           value={searchTerm}
                           onChange={(e) => handleUserSearch(e.target.value)}
                           onKeyDown={(e) => {
@@ -558,6 +651,7 @@ const AdminDonation = () => {
                       <input
                         type="text"
                         maxLength={6}
+                        readOnly={isReadOnly}
                         value={formData.jmin1}
                         onChange={(e) => setFormData({ ...formData, jmin1: e.target.value })}
                         className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500 outline-none font-bold shadow-inner"
@@ -568,6 +662,7 @@ const AdminDonation = () => {
                       <input
                         type="password"
                         maxLength={7}
+                        readOnly={isReadOnly}
                         value={formData.jmin2}
                         onChange={(e) => setFormData({ ...formData, jmin2: e.target.value })}
                         className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500 outline-none font-bold shadow-inner"
@@ -587,7 +682,8 @@ const AdminDonation = () => {
                       <button
                         type="button"
                         onClick={handlePostcode}
-                        className="px-6 py-3.5 bg-slate-900 text-white rounded-2xl font-bold text-sm hover:bg-indigo-600 transition-colors shadow-lg active:scale-95"
+                        disabled={isReadOnly}
+                        className="px-6 py-3.5 bg-slate-900 text-white rounded-2xl font-bold text-sm hover:bg-indigo-600 transition-colors shadow-lg active:scale-95 disabled:bg-slate-300 disabled:cursor-not-allowed"
                       >
                         주소 검색
                       </button>
@@ -596,6 +692,7 @@ const AdminDonation = () => {
                       <label className="text-[11px] font-bold text-slate-400 ml-2">기본 주소</label>
                       <input
                         type="text"
+                        readOnly={isReadOnly}
                         value={formData.address}
                         onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                         className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500 outline-none font-bold shadow-inner"
@@ -605,6 +702,7 @@ const AdminDonation = () => {
                       <label className="text-[11px] font-bold text-slate-400 ml-2">상세 주소</label>
                       <input
                         type="text"
+                        readOnly={isReadOnly}
                         value={formData.address_detail}
                         onChange={(e) => setFormData({ ...formData, address_detail: e.target.value })}
                         className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500 outline-none font-bold shadow-inner"
@@ -625,6 +723,7 @@ const AdminDonation = () => {
                         type="text"
                         required
                         placeholder="0"
+                        readOnly={isReadOnly}
                         value={formData.dona_amt ? Number(formData.dona_amt).toLocaleString() : ''}
                         onChange={(e) => {
                           const val = e.target.value.replace(/[^0-9]/g, '');
@@ -637,6 +736,7 @@ const AdminDonation = () => {
                     <div className="space-y-2">
                       <label className="text-[11px] font-bold text-slate-400 ml-2">현금영수증 발행</label>
                       <select
+                        disabled={isReadOnly}
                         value={formData.receipt_yn}
                         onChange={(e) => setFormData({ ...formData, receipt_yn: e.target.value })}
                         className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500 outline-none font-bold shadow-inner"
@@ -649,6 +749,7 @@ const AdminDonation = () => {
                       <label className="text-[11px] font-bold text-slate-400 ml-2">회사명</label>
                       <input
                         type="text"
+                        readOnly={isReadOnly}
                         value={formData.company_name}
                         onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
                         placeholder="회사명을 입력하세요"
@@ -669,6 +770,7 @@ const AdminDonation = () => {
                         <div className="space-y-2">
                           <label className="text-[11px] font-bold text-slate-400 ml-2">진행 상태</label>
                           <select
+                            disabled={isReadOnly}
                             value={formData.step_code}
                             onChange={(e) => setFormData({ ...formData, step_code: e.target.value })}
                             className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-transparent focus:bg-white focus:border-indigo-500 outline-none font-bold shadow-inner"
@@ -677,6 +779,15 @@ const AdminDonation = () => {
                             <option value="02">승인완료</option>
                             <option value="99">신청취소</option>
                           </select>
+                        </div>
+                        <div className="space-y-2 col-span-2">
+                          <label className="text-[11px] font-bold text-slate-400 ml-2">결제 금액 (실입금액) (원)</label>
+                          <input
+                            type="text"
+                            readOnly
+                            value={formData.real_amt ? Number(formData.real_amt).toLocaleString() : '0'}
+                            className="w-full px-5 py-3.5 rounded-2xl bg-slate-100 border border-transparent outline-none font-bold font-mono text-right text-emerald-600 shadow-inner"
+                          />
                         </div>
                       </div>
                     )}
@@ -689,15 +800,19 @@ const AdminDonation = () => {
                     <h3 className="text-[11px] font-black text-indigo-500 uppercase tracking-widest flex items-center gap-2">
                       <FileText size={14} /> 이용 약관 동의
                     </h3>
-                    <label className="flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-xl cursor-pointer hover:bg-indigo-100 transition-colors group">
+                    <label className={`flex items-center gap-2 px-4 py-2 bg-indigo-50 rounded-xl transition-colors group ${isReadOnly ? 'cursor-not-allowed' : 'cursor-pointer hover:bg-indigo-100'}`}>
                       <div className={`w-4 h-4 rounded flex items-center justify-center transition-all ${formData.agrees.every(v => v) ? 'bg-indigo-600' : 'bg-white border-2 border-indigo-200'}`}>
                         {formData.agrees.every(v => v) && <Check size={10} className="text-white" strokeWidth={4} />}
                       </div>
                       <input
                         type="checkbox"
+                        disabled={isReadOnly}
                         className="hidden"
                         checked={formData.agrees.every(v => v)}
-                        onChange={(e) => setFormData({ ...formData, agrees: Array(13).fill(e.target.checked) })}
+                        onChange={(e) => {
+                          if (isReadOnly) return;
+                          setFormData({ ...formData, agrees: Array(13).fill(e.target.checked) });
+                        }}
                       />
                       <span className="text-[10px] font-black text-indigo-600 uppercase tracking-tight">전체 동의하기</span>
                     </label>
@@ -709,7 +824,7 @@ const AdminDonation = () => {
                       { title: "제2조 (개인정보 수집 및 이용 동의)", content: "회사는 기부금 영수증 발급 및 환급 대행을 위해 성명, 주민등록번호(세무 신고용), 연락처, 주소, 이메일 등을 수집합니다. 수집된 정보는 법령에 따른 보유기간 동안 안전하게 관리됩니다." },
                       { title: "제3조 (서비스 이용의 제한)", content: "회사는 이용자가 본 약관을 위반하거나 서비스의 정상적인 운영을 방해하는 경우 서비스 이용을 제한하거나 중지할 수 있습니다." },
                       { title: "제4조 (권리와 의무)", content: "이용자는 정확한 정보를 제공할 의무가 있으며, 회사는 이용자의 정보를 보호하고 원활한 서비스를 제공할 책임이 있습니다." },
-                      { title: "제5조 (기부금 환급 대행)", content: "이용자는 회사가 대리인으로서 관계 기관에 기부금 환급 업무를 수행하는 데 필요한 권한을 위임하는 것에 동의합니다." },
+                      { title: "제5조 (기부금 물품 대행)", content: "이용자는 회사가 대리인으로서 관계 기관에 기부 물품 업무를 수행하는 데 필요한 권한을 위임하는 것에 동의합니다." },
                       { title: "제6조 (면책 조항)", content: "회사는 천재지변 또는 이용자의 귀책사유로 인한 서비스 장애나 손해에 대하여 책임을 지지 않습니다." },
                       { title: "제7조 (관할 법원)", content: "본 서비스 이용과 관련하여 발생한 분쟁에 대해서는 회사의 본사 소재지를 관할하는 법원을 합의 관할 법원으로 합니다." },
                       { title: "제8조 (기부금 산정 및 한도)", content: "기부금 산정 시 근로소득금액의 최대 30% 한도 내에서 개인 공제 내역, 기부 내역, 이월금, 연봉 변동 등을 고려하여 신청해 주세요. 한도가 넘어가는 기부금에 대해서는 이월되더라도 물품 대금은 완납 해주셔야 합니다." },
@@ -719,15 +834,17 @@ const AdminDonation = () => {
                       { title: "제12조 (신청 기한 안내)", content: "당해년도 기부신청은 연말정산 직후 완료 부탁드리며, 상반기 내 신청 완료 바랍니다. 신청이 늦어지시면 구입할 물품이 없어 기부가 어려울 수 있습니다." },
                       { title: "제13조 (개인정보 제3자 제공 동의)", content: "개인정보 제3자 제공에 동의 하십니까?" }
                     ].map((term, idx) => (
-                      <label key={idx} className="flex gap-4 p-5 rounded-3xl bg-slate-50 hover:bg-white border border-transparent hover:border-indigo-100 hover:shadow-xl hover:shadow-indigo-50/50 transition-all cursor-pointer group">
+                      <label key={idx} className={`flex gap-4 p-5 rounded-3xl bg-slate-50 transition-all group ${isReadOnly ? 'cursor-not-allowed' : 'hover:bg-white border border-transparent hover:border-indigo-100 hover:shadow-xl hover:shadow-indigo-50/50 cursor-pointer'}`}>
                         <div className={`mt-1 w-6 h-6 rounded-lg flex items-center justify-center shrink-0 transition-all ${formData.agrees[idx] ? 'bg-indigo-600 shadow-lg shadow-indigo-200' : 'bg-white border-2 border-slate-200'}`}>
                           {formData.agrees[idx] && <Check size={14} className="text-white" strokeWidth={4} />}
                         </div>
                         <input
                           type="checkbox"
+                          disabled={isReadOnly}
                           className="hidden"
                           checked={formData.agrees[idx]}
                           onChange={() => {
+                            if (isReadOnly) return;
                             const newAgrees = [...formData.agrees];
                             newAgrees[idx] = !newAgrees[idx];
                             setFormData({ ...formData, agrees: newAgrees });
@@ -752,6 +869,7 @@ const AdminDonation = () => {
                       <canvas
                         ref={canvasRef}
                         onMouseDown={(e) => {
+                          if (isReadOnly) return;
                           const canvas = canvasRef.current;
                           const ctx = canvas.getContext('2d');
                           ctx.beginPath();
@@ -759,6 +877,7 @@ const AdminDonation = () => {
                           canvas.isDrawing = true;
                         }}
                         onMouseMove={(e) => {
+                          if (isReadOnly) return;
                           const canvas = canvasRef.current;
                           if (!canvas.isDrawing) return;
                           const ctx = canvas.getContext('2d');
@@ -769,6 +888,7 @@ const AdminDonation = () => {
                           ctx.stroke();
                         }}
                         onMouseUp={() => {
+                          if (isReadOnly) return;
                           const canvas = canvasRef.current;
                           canvas.isDrawing = false;
                           setFormData({ ...formData, signature: canvas.toDataURL() });
@@ -779,16 +899,18 @@ const AdminDonation = () => {
                         }}
                         width={600}
                         height={192}
-                        className="w-full h-full cursor-crosshair"
+                        className={`w-full h-full ${isReadOnly ? 'cursor-not-allowed' : 'cursor-crosshair'}`}
                       />
                       {!formData.signature && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 pointer-events-none gap-2">
                           <PenTool size={32} />
-                          <p className="text-[10px] font-black uppercase tracking-widest">여기에 서명해 주세요</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest">
+                            {isReadOnly ? '등록된 서명이 없습니다' : '여기에 서명해 주세요'}
+                          </p>
                         </div>
                       )}
                     </div>
-                    {formData.signature && (
+                    {formData.signature && !isReadOnly && (
                       <button 
                         type="button" 
                         onClick={() => {
@@ -806,10 +928,18 @@ const AdminDonation = () => {
                 </div>
 
                 <div className="flex gap-4 pt-4">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-5 rounded-3xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition-all font-black">취소</button>
-                  <button type="submit" className="flex-[2] py-5 rounded-3xl bg-indigo-600 text-white shadow-xl shadow-indigo-200 hover:brightness-110 transition-all font-black flex items-center justify-center gap-2 active:scale-95">
-                    <Save size={20} /> {currentDona ? '수정 완료' : '기부 신청 완료'}
-                  </button>
+                  {isReadOnly ? (
+                    <button type="button" onClick={() => setIsModalOpen(false)} className="w-full py-5 rounded-3xl bg-slate-900 text-white hover:bg-slate-800 transition-all font-black flex items-center justify-center gap-2 active:scale-95">
+                      확인
+                    </button>
+                  ) : (
+                    <>
+                      <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-5 rounded-3xl bg-slate-100 text-slate-500 hover:bg-slate-200 transition-all font-black">취소</button>
+                      <button type="submit" className="flex-[2] py-5 rounded-3xl bg-indigo-600 text-white shadow-xl shadow-indigo-200 hover:brightness-110 transition-all font-black flex items-center justify-center gap-2 active:scale-95">
+                        <Save size={20} /> {currentDona ? '수정 완료' : '기부 신청 완료'}
+                      </button>
+                    </>
+                  )}
                 </div>
               </form>
             </div>

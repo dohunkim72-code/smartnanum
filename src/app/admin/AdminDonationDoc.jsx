@@ -46,7 +46,9 @@ const AdminDonationDoc = () => {
     try {
       setLoading(true);
       const query = new URLSearchParams(filters).toString();
-      const response = await fetch(`/api/admin/donation-doc/list?${query}`);
+      const response = await fetch(`/api/admin/donation-doc/list?${query}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       const data = await response.json();
       if (response.ok && Array.isArray(data)) {
         setTargets(data);
@@ -92,7 +94,10 @@ const AdminDonationDoc = () => {
 
       const response = await fetch('/api/admin/donation-doc/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({
           customers: selectedCustomers
         })

@@ -10,7 +10,8 @@ import {
   Calendar,
   User,
   CreditCard,
-  AlertCircle
+  AlertCircle,
+  X
 } from 'lucide-react';
 
 /**
@@ -23,12 +24,21 @@ const AdminDeposit = () => {
 
   const [deposits, setDeposits] = useState([]);
   const [years, setYears] = useState([]); // 년도 목록
+  const [referrals, setReferrals] = useState([]); // 추천인 목록
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString()); // 선택된 년도 (기본값: 올해)
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [referralSearchTerm, setReferralSearchTerm] = useState(isSuperAdmin ? '' : (adminInfo.name || ''));
+  const [selectedReferral, setSelectedReferral] = useState(isSuperAdmin ? '' : (adminInfo.referral_code || ''));
   const [statusFilter, setStatusFilter] = useState('04'); // 04: 입금 대기 (사용자 정의 기준)
   const [statusModal, setStatusModal] = useState({ show: false, type: 'success', message: '' });
+
+  // 입금 등록 모달 상태
+  const [depositModal, setDepositModal] = useState({
+    show: false,
+    item: null,
+    depositType: '01', // '01': 선수금, '02': 물품대금
+    depositAmt: ''
+  });
 
   // 년도 목록 조회
   const fetchYears = async () => {
@@ -70,9 +80,24 @@ const AdminDeposit = () => {
     }
   };
 
+  // 추천인 목록 조회
+  const fetchReferrals = async () => {
+    try {
+      const response = await fetch('/api/admin/referrals', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (!response.ok) throw new Error('Referrals fetch failed');
+      const data = await response.json();
+      setReferrals(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Fetch referrals error:', error);
+    }
+  };
+
   useEffect(() => {
     fetchYears();
     fetchDeposits();
+    fetchReferrals();
   }, []);
 
   // 상태 메시지 표시
@@ -83,34 +108,53 @@ const AdminDeposit = () => {
     }
   };
 
-  // 입금 완료 처리 (상태 변경 및 확정금액 저장)
-  const handleConfirmDeposit = async (item) => {
+  // 입금 확인 모달 열기
+  const handleConfirmDeposit = (item) => {
+    setDepositModal({
+      show: true,
+      item: item,
+      depositType: '01', // 기본값: 선수금
+      depositAmt: String(item.unpaid_amt > 0 ? item.unpaid_amt : '')
+    });
+  };
+
+  // 입금 확인 등록 제출
+  const handleConfirmDepositSubmit = async () => {
+    const { item, depositType, depositAmt } = depositModal;
+    if (!item) return;
+
+    const parsedAmt = Number(depositAmt);
+    if (isNaN(parsedAmt) || parsedAmt <= 0) {
+      showStatus('error', '올바른 입금 금액을 입력해 주세요.');
+      return;
+    }
+
     try {
-      // 실제 입금액을 신청금액과 동일하게 초기화 (필요시 수동 입력 가능하도록 확장)
-      const realAmt = item.dona_amt;
-      
-      const response = await fetch(`/api/admin/donations`, {
-        method: 'PUT',
+      const response = await fetch('/api/admin/donations/deposit', {
+        method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         body: JSON.stringify({
-          ...item,
-          real_amt: realAmt,
-          step_code: '02', // 02: 입금 완료 상태로 변경
-          upd_id: 'admin'
+          cust_no: item.cust_no,
+          dona_yy: item.dona_yy,
+          deposit_type: depositType,
+          deposit_amt: parsedAmt,
+          upd_id: adminInfo.id || 'admin'
         })
       });
 
       if (response.ok) {
-        showStatus('success', `${item.cust_name}님의 입금 처리가 완료되었습니다.`);
+        showStatus('success', `${item.cust_name}님의 입금 등록이 완료되었습니다.`);
+        setDepositModal({ show: false, item: null, depositType: '01', depositAmt: '' });
         fetchDeposits();
       } else {
-        showStatus('error', '입금 처리 중 오류가 발생했습니다.');
+        const data = await response.json();
+        showStatus('error', data.message || '입금 등록 중 오류가 발생했습니다.');
       }
     } catch (error) {
-      console.error('Deposit confirm error:', error);
+      console.error('Deposit submit error:', error);
       showStatus('error', '서버 통신 오류가 발생했습니다.');
     }
   };
@@ -119,7 +163,7 @@ const AdminDeposit = () => {
   const filteredDeposits = deposits.filter(item => {
     const matchesSearch = (item.cust_name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
                         (item.hpno || '').includes(searchTerm);
-    const matchesReferral = (item.referral_name || '').toLowerCase().includes(referralSearchTerm.toLowerCase());
+    const matchesReferral = !selectedReferral || (item.referral_code === selectedReferral);
     const matchesStatus = statusFilter === 'all' || 
                         (statusFilter === '04' && item.deposit_yn !== 'Y') ||
                         (statusFilter === '02' && item.deposit_yn === 'Y');
@@ -217,13 +261,16 @@ const AdminDeposit = () => {
         {/* 추천인 필터 추가 */}
         <div className="flex-1 md:max-w-[200px] relative w-full">
           <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input 
-            type="text" 
-            placeholder="추천인명..."
-            value={referralSearchTerm}
-            onChange={(e) => setReferralSearchTerm(e.target.value)}
-            className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 transition-all font-medium"
-          />
+          <select
+            value={selectedReferral}
+            onChange={(e) => setSelectedReferral(e.target.value)}
+            className="w-full pl-12 pr-10 py-3 bg-slate-50 border-none rounded-xl focus:ring-2 focus:ring-blue-500 transition-all font-bold text-slate-700 appearance-none cursor-pointer"
+          >
+            <option value="">모든 추천인</option>
+            {referrals.map(r => (
+              <option key={r.referral_code} value={r.referral_code}>{r.name} ({r.referral_code})</option>
+            ))}
+          </select>
         </div>
 
         <div className="flex-1 relative w-full">
@@ -270,7 +317,8 @@ const AdminDeposit = () => {
                 <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider">추천인</th>
                 <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-right">기부 신청액</th>
                 <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-right">물품 대금</th>
-                <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-right">입금액</th>
+                <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-right">선수금 입금액</th>
+                <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-right">물품대금 입금액</th>
                 <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-right text-rose-500">미입금액</th>
                 <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-center">상태</th>
                 <th className="px-6 py-5 text-[11px] font-black text-slate-400 uppercase tracking-wider text-center">작업</th>
@@ -279,7 +327,7 @@ const AdminDeposit = () => {
             <tbody className="divide-y divide-slate-50">
               {isLoading ? (
                 <tr>
-                  <td colSpan="7" className="px-8 py-20 text-center">
+                  <td colSpan="9" className="px-8 py-20 text-center">
                     <RefreshCw className="w-10 h-10 text-blue-500 animate-spin mx-auto mb-4" />
                     <p className="text-slate-400 font-bold">데이터를 불러오는 중입니다...</p>
                   </td>
@@ -311,7 +359,10 @@ const AdminDeposit = () => {
                       <p className="text-sm font-bold text-slate-600">₩{(item.goods_amt || 0).toLocaleString()}</p>
                     </td>
                     <td className="px-6 py-6 text-right">
-                      <p className="text-sm font-bold text-emerald-600">₩{(item.deposit_amt || 0).toLocaleString()}</p>
+                      <p className="text-sm font-bold text-emerald-600">₩{(item.pre_deposit_sum || 0).toLocaleString()}</p>
+                    </td>
+                    <td className="px-6 py-6 text-right">
+                      <p className="text-sm font-bold text-blue-600">₩{(item.goods_deposit_sum || 0).toLocaleString()}</p>
                     </td>
                     <td className="px-6 py-6 text-right">
                       <p className="text-sm font-black text-rose-500">₩{(item.unpaid_amt || 0).toLocaleString()}</p>
@@ -335,17 +386,20 @@ const AdminDeposit = () => {
                           입금 확인
                         </button>
                       ) : (
-                        <div className="flex items-center justify-center text-emerald-500 gap-1.5">
-                          <CheckCircle2 size={16} />
-                          <span className="text-xs font-bold">처리완료</span>
-                        </div>
+                        <button 
+                          onClick={() => handleConfirmDeposit(item)}
+                          className="px-4 py-2 bg-slate-600 text-white rounded-xl text-[11px] font-black hover:bg-slate-700 transition-all hover:shadow-lg hover:shadow-slate-200 active:scale-95 flex items-center gap-2 mx-auto"
+                        >
+                          <CreditCard size={14} />
+                          추가 입금
+                        </button>
                       )}
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="8" className="px-8 py-20 text-center">
+                  <td colSpan="9" className="px-8 py-20 text-center">
                     <div className="flex flex-col items-center justify-center opacity-30">
                       <AlertCircle size={48} className="mb-4 text-slate-300" />
                       <p className="text-lg font-bold text-slate-400">조회된 입금 내역이 없습니다.</p>
@@ -357,6 +411,97 @@ const AdminDeposit = () => {
           </table>
         </div>
       </div>
+
+      {/* 입금 등록 모달 */}
+      {depositModal.show && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={() => setDepositModal({ ...depositModal, show: false })} />
+          <div className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="px-8 py-6 bg-slate-900 text-white flex items-center justify-between">
+              <h2 className="text-xl font-black tracking-tight">{depositModal.item?.cust_name}님 입금 처리</h2>
+              <button onClick={() => setDepositModal({ ...depositModal, show: false })} className="text-slate-400 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="p-8 space-y-6">
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">입금 구분</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setDepositModal(prev => ({ ...prev, depositType: '01' }))}
+                    className={`py-3.5 rounded-2xl font-black transition-all ${
+                      depositModal.depositType === '01'
+                        ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-100'
+                        : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+                    }`}
+                  >
+                    선수금 (01)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDepositModal(prev => ({ ...prev, depositType: '02' }))}
+                    className={`py-3.5 rounded-2xl font-black transition-all ${
+                      depositModal.depositType === '02'
+                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-100'
+                        : 'bg-slate-50 text-slate-500 hover:bg-slate-100'
+                    }`}
+                  >
+                    물품대금 (02)
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black text-slate-400 uppercase tracking-widest">입금 금액 (원)</label>
+                <input
+                  type="number"
+                  placeholder="금액을 입력하세요"
+                  value={depositModal.depositAmt}
+                  onChange={(e) => setDepositModal(prev => ({ ...prev, depositAmt: e.target.value }))}
+                  className="w-full px-5 py-4 bg-slate-50 border-none rounded-2xl focus:ring-2 focus:ring-slate-900/10 focus:bg-white transition-all outline-none font-bold text-slate-800"
+                />
+              </div>
+
+              <div className="bg-slate-50 p-5 rounded-2xl space-y-2.5 text-xs text-slate-500 font-bold leading-relaxed border border-slate-100">
+                <div className="flex justify-between">
+                  <span>총 물품대금:</span>
+                  <span className="text-slate-800 font-black">₩{(depositModal.item?.goods_amt || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>선수금 입금액:</span>
+                  <span className="text-emerald-600 font-black">₩{(depositModal.item?.pre_deposit_sum || 0).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>물품대금 입금액:</span>
+                  <span className="text-blue-600 font-black">₩{(depositModal.item?.goods_deposit_sum || 0).toLocaleString()}</span>
+                </div>
+                <div className="h-px bg-slate-200 my-1" />
+                <div className="flex justify-between text-sm">
+                  <span className="text-rose-500">현재 미입금액:</span>
+                  <span className="text-rose-500 font-black">₩{(depositModal.item?.unpaid_amt || 0).toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-8 py-6 bg-slate-50 border-t border-slate-100 flex gap-3">
+              <button
+                onClick={() => setDepositModal({ ...depositModal, show: false })}
+                className="flex-1 py-4 bg-slate-200 text-slate-600 font-black rounded-2xl hover:bg-slate-300 transition-all active:scale-95"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleConfirmDepositSubmit}
+                className="flex-[2] py-4 bg-slate-900 text-white font-black rounded-2xl hover:bg-slate-800 transition-all shadow-lg active:scale-95"
+              >
+                입금 확인 등록
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 상태 모달 */}
       {statusModal.show && (

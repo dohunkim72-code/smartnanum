@@ -45,7 +45,7 @@ const DonationScreen = () => {
       phone: user.hpno || localStorage.getItem('userHpno') || parsedTemp.phone || '',
       company: parsedTemp.company || '',
       amount: parsedTemp.amount || '', // 기부 금액 (임시 저장된 값이 있으면 복원)
-      cashReceipt: parsedTemp.cashReceipt !== undefined ? parsedTemp.cashReceipt : false,
+      cashReceipt: false, // 현금영수증 신청 기능 비활성화로 인한 false 고정 (한글 주석)
       termsAgreed: localStorage.getItem('termsAgreed_status') === 'true',
       note: user.note || localStorage.getItem('userNote') || parsedTemp.note || '', // 사인자(소개자) 성명
       seq_no: null // 수정 시 사용할 일련번호
@@ -205,7 +205,7 @@ const DonationScreen = () => {
       seq_no: detail.step_code === '01' ? detail.seq_no : null,
       amount: formatComma(detail.dona_amt.toString()),
       company: detail.company_name,
-      cashReceipt: detail.receipt_yn === 'Y',
+      cashReceipt: false, // 수정 모드에서도 현금영수증 신청은 강제 false 처리 (한글 주석)
       // 마스터 정보는 기존 폼 데이터에 이미 있을 확률이 높지만, 확실히 하기 위해 
       // 만약 마스터 정보가 필요하다면 여기서 더 보강 가능
     }));
@@ -400,7 +400,46 @@ const DonationScreen = () => {
     }
   };
 
+  // 기부 신청 취소 처리 함수 (한글 주석)
+  const handleCancelClick = async (item) => {
+    if (item.step_code !== '01') {
+      showAlert('알림', '기부요청 상태인 경우만 취소할 수 있습니다. 🔒', 'info');
+      return;
+    }
+
+    if (window.confirm(`${item.company_name}의 ${formatComma(item.dona_amt.toString())}원 기부 신청을 취소하시겠습니까?`)) {
+      try {
+        const response = await fetch('/api/donation/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: userId,
+            year: item.dona_yy,
+            seqNo: item.seq_no
+          })
+        });
+
+        const resData = await response.json();
+
+        if (response.ok) {
+          showAlert('성공', '기부 신청이 성공적으로 취소되었습니다. 🗑️', 'success');
+          // 현재 취소한 항목이 수정 폼에 올라와 있다면 폼 초기화 (한글 주석)
+          if (formData.seq_no === item.seq_no) {
+            resetForm();
+          }
+          // 초기 데이터 다시 불러와 화면 갱신 (한글 주석)
+          fetchInitData();
+        } else {
+          showAlert('오류', resData.message, 'error');
+        }
+      } catch (error) {
+        showAlert('오류', `취소 처리 중 오류가 발생했습니다: ${error.message}`, 'error');
+      }
+    }
+  };
+
   return (
+
     <div className="bg-background-light min-h-screen flex flex-col max-w-[480px] mx-auto overflow-x-hidden pb-40">
       {/* 상단 헤더 */}
       <header className="sticky top-0 z-50 bg-background-light/80 backdrop-blur-md border-b border-slate-100 p-4 flex items-center">
@@ -469,6 +508,7 @@ const DonationScreen = () => {
                   value={formData.residentIdFront}
                   onChange={handleInputChange}
                   readOnly={isClosed}
+                  autoComplete="off"
                   className="w-[120px] h-14 bg-slate-50 border-none rounded-2xl px-4 text-center font-bold text-slate-700 focus:ring-2 focus:ring-primary/20"
                   placeholder="앞 6자리"
                 />
@@ -480,6 +520,7 @@ const DonationScreen = () => {
                   value={formData.residentIdBack}
                   onChange={handleInputChange}
                   readOnly={isClosed}
+                  autoComplete="new-password"
                   className="w-[140px] h-14 bg-slate-50 border-none rounded-2xl px-4 text-center font-bold text-slate-700 focus:ring-2 focus:ring-primary/20"
                   placeholder="뒤 7자리"
                 />
@@ -581,6 +622,8 @@ const DonationScreen = () => {
               </div>
             </div>
 
+            {/* 현금영수증 신청 기능 화면 숨김 처리 (한글 주석) */}
+            {/* 
             <label className="flex items-center gap-3 cursor-pointer p-2 rounded-2xl hover:bg-slate-50 transition-colors">
               <input 
                 type="checkbox"
@@ -592,6 +635,7 @@ const DonationScreen = () => {
               />
               <span className="text-sm font-bold text-slate-700">현금영수증 신청</span>
             </label>
+            */}
 
             {/* 수정 모드 알림 뱃지 */}
             {formData.seq_no && (
@@ -769,18 +813,32 @@ const DonationScreen = () => {
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-[15px] font-black text-slate-900 mb-1">
+                  <div className="text-right flex flex-col items-end gap-1">
+                    <p className="text-[15px] font-black text-slate-900 mb-0.5">
                       {formatComma(item.dona_amt.toString())}원
                     </p>
-                    <div className={`inline-flex items-center px-2 py-0.5 rounded-md ${
-                      item.step_code === '01' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
-                    }`}>
-                      <span className="text-[9px] font-black">
-                        {item.step_code === '01' ? '기부요청' : item.step_code === '02' ? '승인완료' : '처리중'}
-                      </span>
+                    <div className="flex items-center gap-1.5">
+                      {item.step_code === '01' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation(); // 수정 모드 전환 방지 (한글 주석)
+                            handleCancelClick(item);
+                          }}
+                          className="px-2 py-0.5 rounded-md bg-red-50 text-red-600 hover:bg-red-100 text-[10px] font-black border border-red-200 transition-colors"
+                        >
+                          취소
+                        </button>
+                      )}
+                      <div className={`inline-flex items-center px-2 py-0.5 rounded-md ${
+                        item.step_code === '01' ? 'bg-blue-100 text-blue-700' : 'bg-green-100 text-green-700'
+                      }`}>
+                        <span className="text-[9px] font-black">
+                          {item.step_code === '01' ? '기부요청' : item.step_code === '02' ? '승인완료' : '처리중'}
+                        </span>
+                      </div>
                     </div>
                   </div>
+
                 </div>
               ))
             ) : (

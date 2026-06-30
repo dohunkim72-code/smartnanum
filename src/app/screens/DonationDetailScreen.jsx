@@ -44,7 +44,41 @@ const DonationDetailScreen = () => {
     fetchDetail();
   }, [userId, year, seqNo]);
 
+  // 기부 신청 취소 처리 함수 (한글 주석)
+  const handleCancel = async () => {
+    if (!detail || detail.step_code !== '01') {
+      alert('기부요청 상태인 경우만 취소할 수 있습니다.');
+      return;
+    }
+
+    if (window.confirm('이 기부금 신청을 정말 취소하시겠습니까? 취소 후에는 복구할 수 없습니다.')) {
+      try {
+        const response = await fetch('/api/donation/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: userId,
+            year: detail.dona_yy,
+            seqNo: seqNo
+          })
+        });
+
+        const resData = await response.json();
+
+        if (response.ok) {
+          alert('기부 신청이 성공적으로 취소되었습니다. 🗑️');
+          navigate(-1); // 이전 목록 화면으로 돌아가기 (한글 주석)
+        } else {
+          alert(resData.message || '취소 중 오류가 발생했습니다.');
+        }
+      } catch (error) {
+        alert(`취소 처리 중 오류가 발생했습니다: ${error.message}`);
+      }
+    }
+  };
+
   const formatComma = (num) => {
+
     if (num === null || num === undefined) return "0";
     return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   };
@@ -120,7 +154,10 @@ const DonationDetailScreen = () => {
           </div>
           <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100 space-y-4">
             <InfoRow label="이름" value={detail.name} />
-            <InfoRow label="주민등록번호" value={`${detail.jmin1}-${detail.jmin2}`} />
+            <InfoRow 
+              label="주민등록번호" 
+              value={detail.jmin1 ? `${detail.jmin1}-${detail.jmin2 ? detail.jmin2[0] + '******' : '*******'}` : '-'} 
+            />
             <InfoRow label="휴대폰번호" value={detail.hpno} />
             <InfoRow label="우편번호" value={detail.zipcode} />
             <InfoRow label="주소" value={detail.address} />
@@ -137,7 +174,8 @@ const DonationDetailScreen = () => {
           <div className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100 space-y-4">
             <InfoRow label="기부년도" value={`${detail.dona_yy}년`} />
             <InfoRow label="기부금 신청 금액" value={`${formatComma(detail.dona_amt)}원`} />
-            <InfoRow label="현금영수증 신청여부" value={detail.receipt_yn === 'Y' ? '신청' : '미신청'} />
+            {/* 현금영수증 신청여부 숨김 처리 (한글 주석) */}
+            {/* <InfoRow label="현금영수증 신청여부" value={detail.receipt_yn === 'Y' ? '신청' : '미신청'} /> */}
             <InfoRow label="진행상태" value={status.text} isBadge badgeColor={status.color} />
           </div>
         </div>
@@ -158,7 +196,8 @@ const DonationDetailScreen = () => {
             <InfoRow label="미입금액" value={`${formatComma((detail.goods_amt || 0) - (detail.pre_deposit_req_amt || 0) - (detail.deposit_amt || 0))}원`} valueColor="text-red-500" />
             <InfoRow label="대금입금여부" value={detail.goods_yn === 'Y' ? '입금완료' : '미입금'} />
             <InfoRow label="총 입금금액" value={`${formatComma(detail.total_real_amt)}원`} />
-            <InfoRow label="현금영수증 발행여부" value={detail.issuance_yn === 'Y' ? '발행완료' : '미발행'} />
+            {/* 현금영수증 발행여부 숨김 처리 (한글 주석) */}
+            {/* <InfoRow label="현금영수증 발행여부" value={detail.issuance_yn === 'Y' ? '발행완료' : '미발행'} /> */}
           </div>
         </div>
 
@@ -189,6 +228,17 @@ const DonationDetailScreen = () => {
             <span className="material-symbols-outlined">edit_note</span>
             수정하기 {detail.step_code !== '01' && <span className="text-[12px] opacity-60 ml-1">(수정 불가)</span>}
           </button>
+
+          {detail.step_code === '01' && (
+            <button 
+              onClick={handleCancel}
+              className="w-full h-16 bg-red-500 text-white rounded-[2rem] font-black text-lg shadow-xl hover:bg-red-600 active:scale-95 transition-all flex items-center justify-center gap-2"
+            >
+              <span className="material-symbols-outlined">delete_forever</span>
+              신청 취소하기
+            </button>
+          )}
+
           <button 
             onClick={() => navigate(-1)}
             className="w-full h-16 bg-slate-900 text-white rounded-[2rem] font-black text-lg shadow-xl active:scale-95 transition-all"
@@ -196,6 +246,7 @@ const DonationDetailScreen = () => {
             목록으로 돌아가기
           </button>
         </div>
+
       </main>
 
       {isLoggedIn && <BottomNav />}

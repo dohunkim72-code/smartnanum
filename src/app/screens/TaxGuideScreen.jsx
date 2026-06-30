@@ -39,7 +39,7 @@ const TaxGuideScreen = () => {
               <h3 className="text-lg font-black text-slate-900">물품 대금 안내</h3>
             </div>
             <p className="text-[15px] text-slate-700 leading-relaxed font-bold">
-              스마트나눔을 통한 기부 시, <span className="text-primary underline underline-offset-4">물품 대금은 환급 금액의 53%</span>가 적용됩니다.
+              스마트나눔을 통한 기부 시, <span className="text-primary underline underline-offset-4">물품대금은 기부가 완료 되면 금액이 확정 되며, 다음해에 연말 정산 환급 후 물품 대금을 입금 하시면 됩니다.</span>
             </p>
             <div className="mt-4 pt-4 border-t border-slate-200">
               <p className="text-[12px] text-slate-400 font-medium leading-relaxed">

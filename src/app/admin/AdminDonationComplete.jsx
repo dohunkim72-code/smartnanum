@@ -52,7 +52,9 @@ const AdminDonationComplete = () => {
     try {
       setLoading(true);
       const query = new URLSearchParams(filters).toString();
-      const response = await fetch(`/api/admin/donation-complete/list?${query}`);
+      const response = await fetch(`/api/admin/donation-complete/list?${query}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       const data = await response.json();
       if (response.ok && Array.isArray(data)) {
         setTargets(data);
@@ -76,7 +78,9 @@ const AdminDonationComplete = () => {
 
   const fetchReferrals = async () => {
     try {
-      const response = await fetch('/api/admin/referrals');
+      const response = await fetch('/api/admin/referrals', {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       const data = await response.json();
       if (response.ok && Array.isArray(data)) setReferrals(data);
     } catch (error) {
@@ -132,7 +136,10 @@ const AdminDonationComplete = () => {
 
       const response = await fetch('/api/admin/donation-complete/process', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({ customers: selectedCustomers })
       });
 

@@ -740,7 +740,12 @@ const adminController = {
     } catch (error) {
       await conn.rollback();
       console.error('입고 처리 오류:', error);
-      res.status(500).json({ message: '입고 중 오류가 발생했습니다.' });
+      
+      let reason = error.message;
+      if (reason && reason.includes('product_stock_master') && reason.includes("doesn't exist")) {
+        reason = '상품 재고 마스터 테이블(product_stock_master)이 존재하지 않습니다. 관리자에게 문의하세요.';
+      }
+      res.status(500).json({ message: `입고 중 오류가 발생했습니다. (사유: ${reason})` });
     } finally {
       conn.release();
     }
@@ -779,7 +784,122 @@ const adminController = {
     } catch (error) {
       await conn.rollback();
       console.error('입고 삭제 오류:', error);
-      res.status(500).json({ message: '삭제 중 오류가 발생했습니다.' });
+      
+      let reason = error.message;
+      if (reason && reason.includes('product_stock_master') && reason.includes("doesn't exist")) {
+        reason = '상품 재고 마스터 테이블(product_stock_master)이 존재하지 않습니다. 관리자에게 문의하세요.';
+      }
+      res.status(500).json({ message: `삭제 중 오류가 발생했습니다. (사유: ${reason})` });
+    } finally {
+      conn.release();
+    }
+  },
+
+  updateReceipt: async (req, res) => {
+    // URL 파라미터로부터 기존 입고의 복합 키를 가져옵니다.
+    const { receipt_yymm, client_no, product_code, seq_no } = req.params;
+    // Body로부터 새로운 입고 정보와 수정자 ID를 가져옵니다.
+    const { client_no: new_client_no, product_code: new_product_code, quantity: new_quantity, unit_price: new_unit_price, receipt_date: new_receipt_date, reg_id } = req.body;
+    
+    const new_yymm = new_receipt_date.replace(/-/g, '').substring(0, 6);
+    const upd_id = reg_id || 'admin';
+
+    const conn = await db.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      // 1. 기존 입고 데이터 조회 및 검증
+      const [rows] = await conn.execute(
+        'SELECT quantity, unit_price, total_amount, receipt_date FROM product_receipt_master WHERE receipt_yymm = ? AND client_no = ? AND product_code = ? AND seq_no = ?',
+        [receipt_yymm, client_no, product_code, seq_no]
+      );
+
+      if (rows.length === 0) {
+        await conn.rollback();
+        return res.status(404).json({ message: '수정할 입고 내역을 찾을 수 없습니다.' });
+      }
+
+      const old_quantity = rows[0].quantity;
+      const new_total_amount = (new_quantity || 0) * (new_unit_price || 0);
+
+      // 키 조합(yymm, client_no, product_code)이 달라졌는지 체크
+      const isKeyChanged = (receipt_yymm !== new_yymm) || (client_no !== new_client_no) || (product_code !== new_product_code);
+
+      if (isKeyChanged) {
+        // [케이스 A] 키가 변경된 경우: 기존 입고는 삭제(재고 차감)하고 새 입고를 신규 등록(재고 추가)
+
+        // A-1. 기존 키의 재고 차감
+        await conn.execute(
+          'UPDATE product_stock_master SET current_stock = current_stock - ? WHERE client_no = ? AND product_code = ?',
+          [old_quantity, client_no, product_code]
+        );
+
+        // A-2. 기존 입고 데이터 삭제
+        await conn.execute(
+          'DELETE FROM product_receipt_master WHERE receipt_yymm = ? AND client_no = ? AND product_code = ? AND seq_no = ?',
+          [receipt_yymm, client_no, product_code, seq_no]
+        );
+
+        // A-3. 새 키를 기준으로 순번(seq_no) 채번
+        const [seqResult] = await conn.execute(
+          'SELECT IFNULL(MAX(seq_no), 0) + 1 as nextSeq FROM product_receipt_master WHERE receipt_yymm = ? AND client_no = ? AND product_code = ?',
+          [new_yymm, new_client_no, new_product_code]
+        );
+        const nextSeq = seqResult[0].nextSeq;
+
+        // A-4. 새 입고 데이터 등록
+        await conn.execute(
+          `INSERT INTO product_receipt_master (
+            receipt_yymm, client_no, product_code, seq_no, quantity, unit_price, total_amount, receipt_date, reg_id, upd_id
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [new_yymm, new_client_no, new_product_code, nextSeq, new_quantity, new_unit_price, new_total_amount, new_receipt_date, upd_id, upd_id]
+        );
+
+        // A-5. 새 키의 재고 업데이트 (없을 경우 새로 생성, 있을 경우 가산)
+        await conn.execute(
+          `INSERT INTO product_stock_master (client_no, product_code, current_stock, last_receipt_date)
+           VALUES (?, ?, ?, ?)
+           ON DUPLICATE KEY UPDATE 
+           current_stock = current_stock + VALUES(current_stock),
+           last_receipt_date = VALUES(last_receipt_date)`,
+          [new_client_no, new_product_code, new_quantity, new_receipt_date]
+        );
+
+      } else {
+        // [케이스 B] 키가 동일한 경우: 기존 데이터 업데이트 및 수량 차이만큼 재고 반영
+
+        // B-1. 수량 차이 계산
+        const diff = new_quantity - old_quantity;
+
+        // B-2. 입고 데이터 업데이트
+        await conn.execute(
+          `UPDATE product_receipt_master SET 
+            quantity = ?, unit_price = ?, total_amount = ?, receipt_date = ?, upd_id = ?, upd_date = NOW()
+           WHERE receipt_yymm = ? AND client_no = ? AND product_code = ? AND seq_no = ?`,
+          [new_quantity, new_unit_price, new_total_amount, new_receipt_date, upd_id, receipt_yymm, client_no, product_code, seq_no]
+        );
+
+        // B-3. 기존 재고에 차이만큼 업데이트
+        await conn.execute(
+          `UPDATE product_stock_master 
+           SET current_stock = current_stock + ?, 
+               last_receipt_date = CASE WHEN ? > last_receipt_date THEN ? ELSE last_receipt_date END
+           WHERE client_no = ? AND product_code = ?`,
+          [diff, new_receipt_date, new_receipt_date, client_no, product_code]
+        );
+      }
+
+      await conn.commit();
+      res.json({ message: '입고 정보가 정상적으로 수정되었습니다.' });
+    } catch (error) {
+      await conn.rollback();
+      console.error('입고 수정 처리 오류:', error);
+      
+      let reason = error.message;
+      if (reason && reason.includes('product_stock_master') && reason.includes("doesn't exist")) {
+        reason = '상품 재고 마스터 테이블(product_stock_master)이 존재하지 않습니다. 관리자에게 문의하세요.';
+      }
+      res.status(500).json({ message: `수정 중 오류가 발생했습니다. (사유: ${reason})` });
     } finally {
       conn.release();
     }
@@ -789,7 +909,7 @@ const adminController = {
   getStockStatus: async (req, res) => {
     try {
       const [rows] = await db.execute(`
-        SELECT s.*, p.product_name, p.product_category, p.product_spec, p.unit, c.client_name 
+        SELECT s.*, p.product_name, p.product_category, p.product_spec, p.unit, p.cost_price, c.client_name 
         FROM product_stock_master s
         LEFT JOIN product_master p ON s.product_code = p.product_code
         LEFT JOIN client_master c ON s.client_no = c.client_no
@@ -799,7 +919,12 @@ const adminController = {
       res.json(rows);
     } catch (error) {
       console.error('재고 조회 오류:', error);
-      res.status(500).json({ message: '조회 중 오류가 발생했습니다.' });
+      
+      let reason = error.message;
+      if (reason && reason.includes('product_stock_master') && reason.includes("doesn't exist")) {
+        reason = '상품 재고 마스터 테이블(product_stock_master)이 존재하지 않습니다. 관리자에게 문의하세요.';
+      }
+      res.status(500).json({ message: `조회 중 오류가 발생했습니다. (사유: ${reason})` });
     }
   },
 
@@ -937,59 +1062,207 @@ const adminController = {
   getDonations: async (req, res) => {
     try {
       const { dona_yy, searchTerm, referral_code, step_code, deposit_yn } = req.query;
+      const targetYy = dona_yy || new Date().getFullYear().toString();
+      
       let query = `
-        SELECT 
-          d.cust_no, d.dona_yy,
-          MAX(c.name) as cust_name, MAX(c.hpno) as hpno,
-          CASE WHEN MIN(d.step_code) = '02' THEN 'Y' ELSE 'N' END as deposit_yn,
-          SUM(d.dona_amt) as dona_amt,
-          SUM(d.deposit_amt) as deposit_amt,
-          SUM(d.goods_amt) as goods_amt,
-          (SUM(d.dona_amt) - SUM(d.deposit_amt)) as unpaid_amt,
-          MIN(d.step_code) as step_code,
-          MAX(d.reg_date) as reg_date
-        FROM donation_detail d
-        JOIN cust c ON d.cust_no = c.cust_no
-        LEFT JOIN donation_master m ON d.cust_no = m.cust_no AND d.dona_yy = m.dona_yy
+        SELECT * FROM (
+          SELECT 
+            c.cust_no,
+            ? as dona_yy,
+            MIN(d.seq_no) as seq_no,
+            c.name as cust_name, c.hpno as cust_hpno,
+            c.referral_code as referral_code,
+            MIN(r.name) as referral_name,
+            CASE WHEN MIN(d.step_code) = '02' THEN 'Y' ELSE 'N' END as deposit_yn,
+            IFNULL(SUM(d.dona_amt), 0) as dona_amt,
+            IFNULL(SUM(d.goods_amt), 0) as goods_amt,
+            IFNULL(MIN(p1.pre_deposit_sum), 0) as pre_deposit_sum,
+            IFNULL(MIN(p2.goods_deposit_sum), 0) as goods_deposit_sum,
+            (IFNULL(SUM(d.goods_amt), 0) - IFNULL(MIN(p1.pre_deposit_sum), 0) - IFNULL(MIN(p2.goods_deposit_sum), 0)) as unpaid_amt,
+            IFNULL(MIN(d.step_code), '00') as step_code,
+            IFNULL(MAX(d.reg_date), c.reg_date) as reg_date
+          FROM cust c
+          LEFT JOIN donation_detail d ON c.cust_no = d.cust_no AND d.dona_yy = ?
+          LEFT JOIN referral r ON c.referral_code = r.referral_code
+          LEFT JOIN donation_master m ON c.cust_no = m.cust_no AND m.dona_yy = ?
+          LEFT JOIN (
+            SELECT dona_yy, cust_no, SUM(deposit_amt) AS pre_deposit_sum
+            FROM pre_deposit
+            WHERE deposit_type = '01'
+            GROUP BY dona_yy, cust_no
+          ) p1 ON p1.dona_yy = ? AND p1.cust_no = c.cust_no
+          LEFT JOIN (
+            SELECT dona_yy, cust_no, SUM(deposit_amt) AS goods_deposit_sum
+            FROM pre_deposit
+            WHERE deposit_type = '02'
+            GROUP BY dona_yy, cust_no
+          ) p2 ON p2.dona_yy = ? AND p2.cust_no = c.cust_no
+          GROUP BY c.cust_no
+        ) t
         WHERE 1=1
       `;
-      const params = [];
-
-      if (dona_yy) {
-        query += ' AND d.dona_yy = ?';
-        params.push(dona_yy);
-      }
+      
+      const params = [targetYy, targetYy, targetYy, targetYy, targetYy];
 
       if (searchTerm) {
-        query += ' AND (c.name LIKE ? OR c.hpno LIKE ? OR d.company_name LIKE ?)';
+        query += ' AND (t.cust_name LIKE ? OR t.cust_hpno LIKE ?)';
         const likeTerm = `%${searchTerm}%`;
-        params.push(likeTerm, likeTerm, likeTerm);
+        params.push(likeTerm, likeTerm);
       }
 
       if (referral_code) {
-        query += ' AND c.referral_code = ?';
+        query += ' AND t.referral_code = ?';
         params.push(referral_code);
       }
 
       if (step_code && step_code !== 'all') {
-        query += ' AND d.step_code = ?';
+        query += ' AND t.step_code = ?';
         params.push(step_code);
       }
 
-      if (deposit_yn) {
-        if (deposit_yn === 'Y') {
-          query += ' AND NOT EXISTS (SELECT 1 FROM donation_detail d2 WHERE d2.cust_no = d.cust_no AND d2.dona_yy = d.dona_yy AND d2.step_code != "02")';
-        } else {
-          query += ' AND EXISTS (SELECT 1 FROM donation_detail d2 WHERE d2.cust_no = d.cust_no AND d2.dona_yy = d.dona_yy AND d2.step_code = "04")';
-        }
+      if (deposit_yn && deposit_yn !== 'all') {
+        query += ' AND t.deposit_yn = ?';
+        params.push(deposit_yn);
       }
 
-      query += ' GROUP BY d.cust_no, d.dona_yy ORDER BY reg_date DESC';
+      query += ' ORDER BY t.reg_date DESC';
       
       const [rows] = await db.execute(query, params);
       res.json(rows);
     } catch (error) {
       console.error('기부 내역 조회 오류:', error);
+      res.status(500).json({ message: '조회 중 오류가 발생했습니다.' });
+    }
+  },
+
+  // 입금 처리 등록 (선수금 / 물품대금 구분 및 직접 입력)
+  createDeposit: async (req, res) => {
+    const connection = await db.getConnection();
+    try {
+      await connection.beginTransaction();
+      const { cust_no, dona_yy, deposit_type, deposit_amt, upd_id } = req.body;
+      
+      if (!cust_no || !dona_yy || !deposit_type || deposit_amt === undefined || deposit_amt === null) {
+        await connection.rollback();
+        return res.status(400).json({ message: '필수 파라미터가 누락되었습니다.' });
+      }
+
+      const parsedAmt = Number(deposit_amt);
+      if (isNaN(parsedAmt) || parsedAmt < 0) {
+        await connection.rollback();
+        return res.status(400).json({ message: '유효하지 않은 입금 금액입니다.' });
+      }
+
+      // 1. pre_deposit 테이블의 최대 seq_no 가져오기
+      const [preSeqResult] = await connection.execute(
+        'SELECT IFNULL(MAX(seq_no), 0) as max_seq FROM pre_deposit WHERE cust_no = ? AND dona_yy = ?',
+        [cust_no, dona_yy]
+      );
+      const nextPreSeq = preSeqResult[0].max_seq + 1;
+
+      // 2. 예금주용 고객명 조회
+      const [custResult] = await connection.execute(
+        'SELECT name FROM cust WHERE cust_no = ?',
+        [cust_no]
+      );
+      const custName = custResult[0] ? custResult[0].name : '고객';
+
+      // 3. pre_deposit 테이블에 입금 내역 인서트
+      await connection.execute(
+        `INSERT INTO pre_deposit (
+          dona_yy, cust_no, seq_no, deposit_type, deposit_amt, deposit_date, 
+          bank_name, account_no, account_holder, issuance_yn, reg_id, upd_id, reg_date, upd_date
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+        [
+          dona_yy, cust_no, nextPreSeq, deposit_type, parsedAmt,
+          new Date().toISOString().slice(0, 10).replace(/-/g, ''),
+          '관리자처리', '-', custName, 'N', upd_id || 'admin', upd_id || 'admin'
+        ]
+      );
+
+      // 4. 해당 년도/회원의 총 물품대금 및 누적 입금액 조회
+      const [details] = await connection.execute(
+        'SELECT seq_no, goods_amt, dona_amt FROM donation_detail WHERE cust_no = ? AND dona_yy = ?',
+        [cust_no, dona_yy]
+      );
+
+      const [preDeposits] = await connection.execute(
+        `SELECT 
+          IFNULL(SUM(CASE WHEN deposit_type = '01' THEN deposit_amt ELSE 0 END), 0) as pre_sum,
+          IFNULL(SUM(CASE WHEN deposit_type = '02' THEN deposit_amt ELSE 0 END), 0) as goods_sum
+        FROM pre_deposit 
+        WHERE cust_no = ? AND dona_yy = ?`,
+        [cust_no, dona_yy]
+      );
+
+      const preSum = preDeposits[0].pre_sum;
+      const goodsSum = preDeposits[0].goods_sum;
+      const totalDepositSum = preSum + goodsSum;
+
+      const totalGoodsAmt = details.reduce((sum, d) => sum + (d.goods_amt || 0), 0);
+      const unpaidAmt = totalGoodsAmt - preSum - goodsSum;
+
+      // 미입금액이 0 이하가 되면 전체 입금 완료('02') 상태로 업데이트
+      const newStepCode = unpaidAmt <= 0 ? '02' : '04'; // 04: 입금 대기
+
+      // 각 상세 건별로 입금액 배분하여 deposit_amt 및 step_code 갱신
+      let remainingDeposit = totalDepositSum;
+      for (const detail of details) {
+        const allocatedDeposit = Math.min(detail.dona_amt, remainingDeposit);
+        remainingDeposit -= allocatedDeposit;
+
+        await connection.execute(
+          `UPDATE donation_detail 
+           SET deposit_amt = ?, 
+               step_code = ?, 
+               upd_date = NOW(), 
+               upd_id = ? 
+           WHERE cust_no = ? AND dona_yy = ? AND seq_no = ?`,
+          [allocatedDeposit, newStepCode, upd_id || 'admin', cust_no, dona_yy, detail.seq_no]
+        );
+      }
+
+      // 5. 마스터 테이블 최종 갱신
+      await connection.execute(
+        'UPDATE donation_master SET upd_date = NOW() WHERE cust_no = ? AND dona_yy = ?',
+        [cust_no, dona_yy]
+      );
+
+      await connection.commit();
+      res.json({ success: true, message: '입금 처리가 성공적으로 등록되었습니다.' });
+    } catch (error) {
+      await connection.rollback();
+      console.error('입금 등록 처리 중 오류 발생:', error);
+      res.status(500).json({ message: '입금 처리 등록 중 오류가 발생했습니다.' });
+    } finally {
+      connection.release();
+    }
+  },
+
+  // 기부 신청 단건 상세 조회
+  getDonationDetail: async (req, res) => {
+    const { cust_no, dona_yy } = req.params;
+    try {
+      // 해당 회원/연도의 기부 신청 데이터 단건 조회 (대표 건)
+      const query = `
+        SELECT 
+          d.*,
+          c.name as cust_name, c.hpno as cust_hpno,
+          m.jmin1, m.jmin2, m.zipcode, m.address, m.address_detail, m.last_amt
+        FROM donation_detail d
+        JOIN cust c ON d.cust_no = c.cust_no
+        LEFT JOIN donation_master m ON d.cust_no = m.cust_no AND d.dona_yy = m.dona_yy
+        WHERE d.cust_no = ? AND d.dona_yy = ?
+        ORDER BY d.seq_no ASC
+        LIMIT 1
+      `;
+      const [rows] = await db.execute(query, [cust_no, dona_yy]);
+      if (rows.length === 0) {
+        return res.status(404).json({ message: '해당 기부 신청 내역을 찾을 수 없습니다.' });
+      }
+      res.json(rows[0]);
+    } catch (error) {
+      console.error('기부 상세 조회 오류:', error);
       res.status(500).json({ message: '조회 중 오류가 발생했습니다.' });
     }
   },
@@ -1279,6 +1552,12 @@ const adminController = {
         [cust_no, dona_yy, seq_no]
       );
 
+      // 4. 총 금액이 0원 이하가 된 마스터 레코드는 삭제 (한글 주석)
+      await connection.execute(
+        'DELETE FROM donation_master WHERE cust_no = ? AND dona_yy = ? AND total_dona_amt <= 0',
+        [cust_no, dona_yy]
+      );
+
       await connection.commit();
       res.json({ message: '기부 내역이 삭제되었습니다.' });
     } catch (error) {
@@ -1293,16 +1572,23 @@ const adminController = {
   // 기부금 생성 대상 목록 조회 (step_code '01' 대기중인 건)
   getDonationsForCreate: async (req, res) => {
     try {
-      const { dona_yy, referral_code } = req.query;
+      const { dona_yy, referral_code, pre_deposit_yn } = req.query;
       let query = `
         SELECT 
           d.*, c.name as cust_name, c.hpno as cust_hpno,
           r.name as referral_name,
-          m.last_amt
+          m.last_amt,
+          IFNULL(p.pre_deposit_sum, 0) as pre_deposit_sum
         FROM donation_detail d
         JOIN cust c ON d.cust_no = c.cust_no
         JOIN donation_master m ON d.cust_no = m.cust_no AND d.dona_yy = m.dona_yy
         LEFT JOIN referral r ON c.referral_code = r.referral_code
+        LEFT JOIN (
+          SELECT dona_yy, cust_no, SUM(deposit_amt) AS pre_deposit_sum
+          FROM pre_deposit
+          WHERE deposit_type = '01'
+          GROUP BY dona_yy, cust_no
+        ) p ON p.dona_yy = d.dona_yy AND p.cust_no = d.cust_no
         WHERE d.dona_yy = ? AND d.step_code = '01'
       `;
       const params = [dona_yy];
@@ -1310,6 +1596,14 @@ const adminController = {
         query += ' AND c.referral_code = ?';
         params.push(referral_code);
       }
+      
+      // 선수금 필터 적용 (Y: 입금완료, N: 미입금)
+      if (pre_deposit_yn === 'Y') {
+        query += ' AND IFNULL(p.pre_deposit_sum, 0) > 0';
+      } else if (pre_deposit_yn === 'N') {
+        query += ' AND IFNULL(p.pre_deposit_sum, 0) = 0';
+      }
+      
       query += ' ORDER BY c.name ASC';
       const [rows] = await db.execute(query, params);
       res.json(rows);
@@ -1329,8 +1623,21 @@ const adminController = {
     }
 
     const adminId = reg_id || 'admin';
+    // 재고 소진으로 인한 전체 중단 플래그
+    let stockExhausted = false;
 
     for (const cust of customers) {
+      // 재고가 소진되었으면 이후 대상자 모두 스킵
+      if (stockExhausted) {
+        results.push({ 
+          cust_no: cust.cust_no, 
+          name: cust.cust_name, 
+          status: 'SKIP', 
+          reason: '재고가 소진되어 처리를 중단합니다.' 
+        });
+        continue;
+      }
+
       const conn = await db.getConnection();
       try {
         await conn.beginTransaction();
@@ -1365,7 +1672,7 @@ const adminController = {
             [adminId, cust.cust_no, cust.dona_yy, cust.seq_no]
           );
           
-          // 8. 기부 마스터 총 실기부액 및 환급액 업데이트
+          // 기부 마스터 총 실기부액 및 환급액 업데이트
           const [sumResult] = await conn.execute(
             `SELECT IFNULL(SUM(real_amt), 0) as total_sum 
              FROM donation_detail 
@@ -1405,19 +1712,21 @@ const adminController = {
         );
         let nextReleaseSeq = Number(seqRow[0].max_seq) + 1;
 
-        // 3. 재고 목록 조회 및 잠금 (판매가 낮은 순으로 우선 매칭)
+        // 3. 재고 목록 조회 및 잠금 (단가가 낮은 순으로 우선 매칭)
         const [stockRows] = await conn.execute(`
           SELECT ps.client_no, ps.product_code, ps.current_stock, 
-                 pm.product_name, pm.sale_price as unit_price
+                 pm.product_name, pm.cost_price as unit_price
           FROM product_stock_master ps
           JOIN product_master pm ON ps.product_code = pm.product_code
           WHERE ps.current_stock > 0
-          ORDER BY pm.sale_price ASC
+          ORDER BY pm.cost_price ASC
           FOR UPDATE
         `);
 
+        // 가용 재고가 없으면 이 대상자부터 중단
         if (stockRows.length === 0) {
-          results.push({ cust_no: cust.cust_no, name: cust.cust_name, status: 'SKIP', reason: '가용 재고가 없습니다.' });
+          stockExhausted = true;
+          results.push({ cust_no: cust.cust_no, name: cust.cust_name, status: 'SKIP', reason: '가용 재고가 없어 이 대상자부터 생성을 중단합니다.' });
           await conn.rollback();
           continue;
         }
@@ -1439,38 +1748,64 @@ const adminController = {
           const qty = Math.min(available, possibleQty);
           if (qty <= 0) continue;
 
-          // 4. 재고 차감
+          const totalAmount = price * qty;
+
+          usedProducts.push({
+            client_no: stock.client_no,
+            product_code: stock.product_code,
+            name: stock.product_name,
+            quantity: qty,
+            price: price,
+            amount: totalAmount
+          });
+
+          targetAmt -= totalAmount;
+          matchingAmt += totalAmount;
+        }
+
+        // 4. 매칭률 검증: 목표 금액 대비 매칭 금액이 95% 미만이면 생성 중단
+        const originalTarget = Math.max(0, Number(donation.dona_amt || 0) - Number(donation.last_amt || 0));
+        const matchRate = originalTarget > 0 ? (matchingAmt / originalTarget) : 0;
+
+        if (matchingAmt === 0 || matchRate < 0.95) {
+          // 매칭이 충분하지 않으면 이 대상자부터 중단 (재고 부족으로 판단)
+          stockExhausted = true;
+          results.push({ 
+            cust_no: cust.cust_no, 
+            name: cust.cust_name, 
+            status: 'SKIP', 
+            reason: `재고 매칭률 ${Math.round(matchRate * 100)}%로 기부 금액에 근접하지 않아 이 대상자부터 생성을 중단합니다. (필요: ${originalTarget.toLocaleString()}원, 매칭: ${matchingAmt.toLocaleString()}원)` 
+          });
+          await conn.rollback();
+          continue;
+        }
+
+        // 5. 매칭 성공 → 실제 재고 차감 및 출고 기록 생성
+        for (const product of usedProducts) {
+          // 재고 차감
           const [upd] = await conn.execute(
             `UPDATE product_stock_master
              SET current_stock = current_stock - ?, last_release_date = CURDATE()
              WHERE client_no = ? AND product_code = ? AND current_stock >= ?`,
-            [qty, stock.client_no, stock.product_code, qty]
+            [product.quantity, product.client_no, product.product_code, product.quantity]
           );
 
-          if (upd.affectedRows === 0) continue;
+          if (upd.affectedRows === 0) {
+            // 동시성 이슈로 재고 부족 시 롤백
+            throw new Error(`재고 차감 실패: ${product.name} (동시 접근으로 인한 재고 부족)`);
+          }
 
-          const totalAmount = price * qty;
-
-          // 5. 출고 마스터 기록 생성
+          // 출고 마스터 기록 생성
           await conn.execute(
             `INSERT INTO product_release_master (
                client_no, product_code, cust_no, seq_no, quantity,
                unit_price, total_amount, release_date, dona_yy, reg_id, upd_id
              ) VALUES (?, ?, ?, ?, ?, ?, ?, CURDATE(), ?, ?, ?)`,
             [
-              stock.client_no, stock.product_code, cust.cust_no, nextReleaseSeq++, 
-              qty, price, totalAmount, cust.dona_yy, adminId, adminId
+              product.client_no, product.product_code, cust.cust_no, nextReleaseSeq++, 
+              product.quantity, product.price, product.amount, cust.dona_yy, adminId, adminId
             ]
           );
-
-          usedProducts.push({
-            name: stock.product_name,
-            quantity: qty,
-            amount: totalAmount
-          });
-
-          targetAmt -= totalAmount;
-          matchingAmt += totalAmount;
         }
 
         // 6. 실제 기부 인정 금액 결정 (전년이월 + 매칭금액)
@@ -1518,12 +1853,19 @@ const adminController = {
           status: 'SUCCESS', 
           filledAmt: finalRealAmt, 
           matchingAmt: matchingAmt,
-          usedProducts 
+          matchRate: Math.round(matchRate * 100),
+          usedProducts: usedProducts.map(p => ({ name: p.name, quantity: p.quantity, amount: p.amount }))
         });
       } catch (error) {
         if (conn) await conn.rollback();
         console.error(`기부 생성 처리 중 오류 (cust_no: ${cust.cust_no}):`, error);
-        results.push({ cust_no: cust.cust_no, name: cust.cust_name, status: 'ERROR', reason: error.message });
+        
+        let reason = error.message;
+        if (reason && reason.includes('product_stock_master') && reason.includes("doesn't exist")) {
+          reason = '기부 상품 재고 테이블(product_stock_master)이 데이터베이스에 존재하지 않습니다. 시스템 관리자에게 문의하여 테이블 생성을 확인하세요.';
+        }
+        
+        results.push({ cust_no: cust.cust_no, name: cust.cust_name, status: 'ERROR', reason });
       } finally {
         if (conn) conn.release();
       }
@@ -1716,9 +2058,9 @@ const adminController = {
         FROM donation_detail d
         JOIN cust c     ON d.cust_no = c.cust_no
         JOIN referral r ON c.referral_code = r.referral_code
-        LEFT JOIN basiccode bc
+        LEFT JOIN basicCode bc
           ON bc.base_code = 'step_code' AND bc.sub_code = d.step_code
-        LEFT JOIN bankinfo bi
+        LEFT JOIN bankInfo bi
           ON bi.bank_code = d.bank_code
         LEFT JOIN (
           SELECT dona_yy, cust_no, SUM(deposit_amt) AS pre_deposit_sum
@@ -1745,18 +2087,20 @@ const adminController = {
       const query = `
         SELECT 
           d.*, 
-          dm.name, 
-          dm.jmin1, dm.jmin2, dm.zipcode, dm.address, dm.address_detail, dm.hpno,
-          c.id, 
-          r.name AS referral_name, 
-          bc.code_name AS step_name,
+          MIN(dm.name) AS name, 
+          MIN(dm.jmin1) AS jmin1, MIN(dm.jmin2) AS jmin2, 
+          MIN(dm.zipcode) AS zipcode, MIN(dm.address) AS address, MIN(dm.address_detail) AS address_detail, 
+          MIN(dm.hpno) AS hpno,
+          MIN(c.id) AS id, 
+          MIN(r.name) AS referral_name, 
+          MIN(bc.code_name) AS step_name,
           IFNULL(SUM(prm.total_amount), 0) AS real_amt,
           IFNULL(SUM(prm.quantity), 0) AS release_qty
         FROM donation_detail d
         JOIN donation_master dm ON d.cust_no = dm.cust_no AND d.dona_yy = dm.dona_yy
         JOIN cust c ON d.cust_no = c.cust_no
         LEFT JOIN referral r ON c.referral_code = r.referral_code
-        LEFT JOIN basiccode bc ON d.step_code = bc.sub_code AND bc.base_code = 'step_code'
+        LEFT JOIN basicCode bc ON d.step_code = bc.sub_code AND bc.base_code = 'step_code'
         LEFT JOIN product_release_master prm 
           ON prm.cust_no = d.cust_no AND prm.dona_yy = d.dona_yy
         WHERE d.dona_yy = ? AND d.step_code = '02'
@@ -1928,6 +2272,12 @@ const adminController = {
           const fullJumin = `${donation.jmin1}-${donation.jmin2}`;
           const fullAddress = `${donation.address} ${donation.address_detail}`;
 
+          // 당일 날짜 포맷팅 변수 정의
+          const now = dayjs();
+          const yyyy = now.format('YYYY');
+          const mm = now.format('MM');
+          const dd = now.format('DD');
+
           if (sheet) {
             sheet.getCell('B2').value = donation.name;
             sheet.getCell('G2').value = fullJumin;
@@ -1949,8 +2299,9 @@ const adminController = {
               sheet.getCell(`F${9 + j}`).value = sumamount;
             }
 
-            sheet.getCell('B14').value = dayjs().format('YYYY년 MM월 DD일');
-            sheet.getCell('A25').value = dayjs().format('YYYY년 MM월 DD일');
+            // 요청에 맞춘 날짜 포맷 적용
+            sheet.getCell('B14').value = now.format('YYYY-MM-DD');
+            sheet.getCell('A25').value = `${yyyy}  년 \u00a0   ${mm}   월   ${dd}   일`;
             sheet.getCell('C26').value = donation.name;
           }
 
@@ -1993,7 +2344,8 @@ const adminController = {
               sheet2.getCell(`F${rowNum}`).value = p.sale_price;
               sheet2.getCell(`G${rowNum}`).value = sumSale;
             }
-            sheet2.getCell('A21').value = dayjs().format('YYYY년 MM월 DD일');
+            // 요청에 맞춘 날짜 포맷 적용
+            sheet2.getCell('A21').value = `${yyyy}   년     ${mm}    월   ${dd}   일`;
             sheet2.getCell('D22').value = donation.name;
             sheet2.getCell('E23').value = fullJumin;
           }
@@ -2152,7 +2504,7 @@ const adminController = {
         JOIN donation_master dm ON d.cust_no = dm.cust_no AND d.dona_yy = dm.dona_yy
         JOIN cust c ON d.cust_no = c.cust_no
         LEFT JOIN referral r ON c.referral_code = r.referral_code
-        LEFT JOIN basiccode bc ON d.step_code = bc.sub_code AND bc.base_code = 'step_code'
+        LEFT JOIN basicCode bc ON d.step_code = bc.sub_code AND bc.base_code = 'step_code'
         ${where}
         ORDER BY dm.name
       `;
@@ -2208,7 +2560,7 @@ const adminController = {
 
         // 추천인별 입금계좌 조회
         const [bankRows] = await connection.execute(
-          `SELECT bank_code FROM bankinfo WHERE referral_code = ? LIMIT 1`,
+          `SELECT bank_code FROM bankInfo WHERE referral_code = ? LIMIT 1`,
           [referralCode]
         );
         const bankCode = bankRows.length > 0 ? bankRows[0].bank_code : null;
@@ -2256,7 +2608,7 @@ const adminController = {
     try {
       const { dona_yy, name, referral_code } = req.query;
       const params = [dona_yy];
-      let where = "WHERE d.dona_yy = ? AND c.receipt_yn = 'Y'"; // 현금영수증 요청자 중심
+      let where = "WHERE d.dona_yy = ? AND d.step_code = '04' AND IFNULL(d.issuance_yn, 'N') = 'N' AND d.receipt_yn = 'Y'"; // 현금영수증 신청(Y) + 미발행(N) + 기부완료(04) 기준
 
       if (name) {
         where += " AND dm.name LIKE ?";
@@ -2277,13 +2629,13 @@ const adminController = {
           IFNULL(d.deposit_amt, 0) as deposit_amt,
           IFNULL((SELECT SUM(deposit_amt) FROM pre_deposit WHERE cust_no = d.cust_no AND dona_yy = d.dona_yy), 0) as sum_deposit_amt,
           dm.hpno,
-          c.receipt_yn,
+          d.receipt_yn,
           IFNULL(d.issuance_yn, 'N') as issuance_yn
         FROM donation_detail d
         JOIN donation_master dm ON d.cust_no = dm.cust_no AND d.dona_yy = dm.dona_yy
         JOIN cust c ON d.cust_no = c.cust_no
         LEFT JOIN referral r ON c.referral_code = r.referral_code
-        LEFT JOIN basiccode bc ON d.step_code = bc.sub_code AND bc.base_code = 'step_code'
+        LEFT JOIN basicCode bc ON d.step_code = bc.sub_code AND bc.base_code = 'step_code'
         ${where}
         ORDER BY dm.name
       `;

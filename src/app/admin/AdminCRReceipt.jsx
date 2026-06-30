@@ -53,7 +53,9 @@ const AdminCRReceipt = () => {
   useEffect(() => {
     const fetchReferrals = async () => {
       try {
-        const response = await fetch('/api/admin/referrals');
+        const response = await fetch('/api/admin/referrals', {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+        });
         const data = await response.json();
         if (Array.isArray(data)) setReferrals(data);
       } catch (error) {
@@ -68,7 +70,9 @@ const AdminCRReceipt = () => {
     try {
       setLoading(true);
       const query = new URLSearchParams(filters).toString();
-      const response = await fetch(`/api/admin/cr-receipt/list?${query}`);
+      const response = await fetch(`/api/admin/cr-receipt/list?${query}`, {
+        headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+      });
       const data = await response.json();
       if (response.ok && Array.isArray(data)) {
         setList(data);
@@ -115,7 +119,10 @@ const AdminCRReceipt = () => {
 
       const response = await fetch('/api/admin/cr-receipt/export', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
         body: JSON.stringify({
           customers: selectedItems
         })

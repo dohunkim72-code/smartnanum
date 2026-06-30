@@ -9,7 +9,8 @@ import {
   ArrowRight,
   TrendingUp,
   PackageCheck,
-  Calendar
+  Calendar,
+  DollarSign
 } from 'lucide-react';
 
 /**
@@ -52,6 +53,8 @@ const AdminStock = () => {
   // 통계 요약 계산 (배열인 경우에만 계산)
   const totalStockItems = (Array.isArray(stocks) ? stocks : []).reduce((acc, curr) => acc + (Number(curr?.current_stock) || 0), 0);
   const lowStockItems = (Array.isArray(stocks) ? stocks : []).filter(s => (Number(s?.current_stock) || 0) < 10).length;
+  // 총 재고 금액 계산 (단가 × 재고수량)
+  const totalStockAmount = (Array.isArray(stocks) ? stocks : []).reduce((acc, curr) => acc + ((Number(curr?.cost_price) || 0) * (Number(curr?.current_stock) || 0)), 0);
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -75,7 +78,7 @@ const AdminStock = () => {
         </div>
 
         {/* 요약 대시보드 카드 */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-5">
             <div className="p-4 bg-blue-600 rounded-2xl text-white shadow-lg shadow-blue-100">
               <PackageCheck size={28} />
@@ -105,6 +108,16 @@ const AdminStock = () => {
               <h3 className="text-2xl font-bold text-gray-800">{new Set((stocks || []).map(s => s.client_no)).size} <span className="text-sm font-normal text-gray-400 ml-1">Clients</span></h3>
             </div>
           </div>
+
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 flex items-center gap-5">
+            <div className="p-4 bg-indigo-600 rounded-2xl text-white shadow-lg shadow-indigo-100">
+              <DollarSign size={28} />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-500">총 재고 금액</p>
+              <h3 className="text-2xl font-bold text-gray-800">{totalStockAmount.toLocaleString()} <span className="text-sm font-normal text-gray-400 ml-1">원</span></h3>
+            </div>
+          </div>
         </div>
 
         {/* 검색바 */}
@@ -129,6 +142,7 @@ const AdminStock = () => {
                   <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase">상품 정보</th>
                   <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase">카테고리</th>
                   <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-right">현재 재고</th>
+                  <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-right">재고 금액</th>
                   <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase">최종 입고 / 출고</th>
                   <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase text-center">상태</th>
                 </tr>
@@ -136,11 +150,11 @@ const AdminStock = () => {
               <tbody className="divide-y divide-gray-50">
                 {loading ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-10 text-center text-gray-400">데이터 분석 중...</td>
+                    <td colSpan="7" className="px-6 py-10 text-center text-gray-400">데이터 분석 중...</td>
                   </tr>
                 ) : filteredStocks.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="px-6 py-10 text-center text-gray-400">조회된 재고 내역이 없습니다.</td>
+                    <td colSpan="7" className="px-6 py-10 text-center text-gray-400">조회된 재고 내역이 없습니다.</td>
                   </tr>
                 ) : (
                   filteredStocks.map((s) => (
@@ -168,6 +182,12 @@ const AdminStock = () => {
                           {(s.current_stock || 0).toLocaleString()}
                         </div>
                         <div className="text-xs text-gray-400 mt-0.5">{s.unit || 'EA'}</div>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <div className="text-sm font-bold text-indigo-600">
+                          {((Number(s.cost_price) || 0) * (Number(s.current_stock) || 0)).toLocaleString()}
+                        </div>
+                        <div className="text-xs text-gray-400 mt-0.5">단가 {(Number(s.cost_price) || 0).toLocaleString()}원</div>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1.5 text-xs text-gray-500">

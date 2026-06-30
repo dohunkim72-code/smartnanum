@@ -53,7 +53,8 @@ const AdminLayout = ({ children }) => {
     {
       name: '기부 관리',
       items: [
-        { name: '기부 신청 관리', path: '/admin/donations', icon: <Heart size={20} /> },
+        { name: '기부 현황', path: '/admin/donations', icon: <Heart size={20} /> },
+
         { name: '기부금 생성 관리', path: '/admin/donations/create', icon: <Sparkles size={20} />, superOnly: true },
         { name: '기부 문서 생성', path: '/admin/donations/docs', icon: <FileText size={20} />, superOnly: true },
         { name: '기부 완료 처리', path: '/admin/donations/complete', icon: <CheckCircle2 size={20} />, superOnly: true },

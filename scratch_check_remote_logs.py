@@ -10,15 +10,16 @@ ssh.connect(host, username=user, password=password)
 
 # Check PM2 logs for smartnanum-server
 # We'll get the last 50 lines of logs
-stdin, stdout, stderr = ssh.exec_command('pm2 logs smartnanum-server --lines 50 --no-colors --err')
+stdin, stdout, stderr = ssh.exec_command('pm2 logs smartnanum-server --lines 50 --err')
 print("--- ERROR LOGS ---")
 print(stdout.read().decode(errors='ignore'))
 print(stderr.read().decode(errors='ignore'))
 
 # Also check regular out logs just in case
-stdin, stdout, stderr = ssh.exec_command('pm2 logs smartnanum-server --lines 50 --no-colors --out')
+stdin, stdout, stderr = ssh.exec_command('pm2 logs smartnanum-server --lines 50 --out')
 print("--- OUTPUT LOGS ---")
 print(stdout.read().decode(errors='ignore'))
 print(stderr.read().decode(errors='ignore'))
+
 
 ssh.close()

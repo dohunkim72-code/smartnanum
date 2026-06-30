@@ -13,27 +13,61 @@ const DonationHistoryScreen = () => {
   const [selectedYear, setSelectedYear] = useState(''); // 선택된 년도
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchHistory = async () => {
-      try {
-        const response = await fetch(`/api/donation/history?id=${userId}`);
-        const data = await response.json();
-        if (response.ok) {
-          setHistoryByYear(data);
-          // 데이터가 있으면 가장 최신 년도를 기본 선택
-          if (data.length > 0) {
-            setSelectedYear(data[0].dona_yy);
-          }
+  const fetchHistory = async () => {
+    try {
+      const response = await fetch(`/api/donation/history?id=${userId}`);
+      const data = await response.json();
+      if (response.ok) {
+        setHistoryByYear(data);
+        // 데이터가 있으면 가장 최신 년도를 기본 선택 (한글 주석)
+        if (data.length > 0 && !selectedYear) {
+          setSelectedYear(data[0].dona_yy);
         }
-      } catch (error) {
-        console.error('내역 조회 실패:', error);
-      } finally {
-        setLoading(false);
       }
-    };
+    } catch (error) {
+      console.error('내역 조회 실패:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
     if (userId) fetchHistory();
   }, [userId]);
+
+  // 기부 신청 취소 처리 함수 (한글 주석)
+  const handleCancelClick = async (item) => {
+    if (item.step_code !== '01') {
+      alert('기부요청 상태인 경우만 취소할 수 있습니다.');
+      return;
+    }
+
+    if (window.confirm(`${item.company_name || '기부 신청'} 건의 ${formatComma(item.dona_amt)}원 기부 신청을 취소하시겠습니까?`)) {
+      try {
+        const response = await fetch('/api/donation/cancel', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: userId,
+            year: item.dona_yy,
+            seqNo: item.seq_no
+          })
+        });
+
+        const resData = await response.json();
+
+        if (response.ok) {
+          alert('기부 신청이 성공적으로 취소되었습니다. 🗑️');
+          fetchHistory(); // 목록 갱신 (한글 주석)
+        } else {
+          alert(resData.message || '취소 중 오류가 발생했습니다.');
+        }
+      } catch (error) {
+        alert(`취소 처리 중 오류가 발생했습니다: ${error.message}`);
+      }
+    }
+  };
+
 
   // 숫자 콤마 포맷팅
   const formatComma = (num) => {
@@ -100,14 +134,12 @@ const DonationHistoryScreen = () => {
         {/* Summary Card */}
         <div className="px-4 py-4">
           <div 
-            onClick={() => navigate(`/donation-detail?year=${currentYear}`)}
-            className="flex flex-col items-stretch justify-start rounded-[2.5rem] shadow-xl shadow-primary/10 bg-white dark:bg-white/5 overflow-hidden border border-slate-50 cursor-pointer active:scale-[0.98] transition-all hover:border-primary/20"
+            className="flex flex-col items-stretch justify-start rounded-[2.5rem] shadow-xl shadow-primary/10 bg-white dark:bg-white/5 overflow-hidden border border-slate-50"
           >
             <div className="w-full bg-gradient-to-br from-primary via-[#4e2cf3] to-blue-600 aspect-[21/9] flex flex-col justify-center px-8 text-white relative">
               <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-10 -mt-10 blur-2xl animate-pulse"></div>
               <div className="flex justify-between items-start">
                 <p className="text-sm font-medium opacity-80">{currentYear}년 기부 현황</p>
-                <span className="text-[10px] bg-white/20 px-2 py-0.5 rounded-full font-bold">합산 상세 보기 &gt;</span>
               </div>
               <div className="flex items-baseline gap-1 mt-1">
                 <span className="text-4xl font-black">{formatComma(totalAmount)}</span>
@@ -170,10 +202,24 @@ const DonationHistoryScreen = () => {
                         </p>
                       </div>
                     </div>
-                    <span className={`px-3 py-1 rounded-xl text-[11px] font-black ${status.color}`}>
-                      {status.text}
-                    </span>
+                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      {item.step_code === '01' && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation(); // 상세 내역으로의 이동 방지 (한글 주석)
+                            handleCancelClick(item);
+                          }}
+                          className="px-2 py-1 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 text-[11px] font-black border border-red-200 transition-colors"
+                        >
+                          취소
+                        </button>
+                      )}
+                      <span className={`px-3 py-1 rounded-xl text-[11px] font-black ${status.color}`}>
+                        {status.text}
+                      </span>
+                    </div>
                   </div>
+
                   <div className="flex items-end justify-between pt-4 border-t border-slate-50">
                     <div className="space-y-1">
                       <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wide">기부금액</p>

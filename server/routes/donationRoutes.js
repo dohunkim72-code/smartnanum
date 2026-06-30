@@ -17,4 +17,8 @@ router.get('/detail', donationController.getDonationDetail);
 // 연도별 합산 내역 조회
 router.get('/yearly-summary', donationController.getDonationYearlySummary);
 
+// 기부금 신청 취소
+router.post('/cancel', donationController.cancelDonation);
+
 module.exports = router;
+
